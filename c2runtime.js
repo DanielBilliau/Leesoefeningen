@@ -19330,10 +19330,10 @@ cr.plugins_.Touch = function(runtime)
 }());
 cr.getObjectRefTable = function () { return [
 	cr.plugins_.Browser,
-	cr.plugins_.TiledBg,
-	cr.plugins_.Sprite,
-	cr.plugins_.Text,
 	cr.plugins_.Touch,
+	cr.plugins_.Sprite,
+	cr.plugins_.TiledBg,
+	cr.plugins_.Text,
 	cr.system_object.prototype.cnds.OnLayoutStart,
 	cr.plugins_.Text.prototype.acts.SetText,
 	cr.plugins_.Touch.prototype.cnds.IsTouchingObject,
