@@ -1,0 +1,90 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>AVI-lezen</title>
+</head>
+
+<body bgcolor="#C0C0C0" background="dieren2.jpg">
+<div align="center">
+<table border="3" width="96%" height="80" bordercolor="#008000" id="table1">
+  <tr>
+    <td style="font-family: Times New Roman; font-size: 14pt" bgcolor="#FFFF00" width="96%" colspan="3">
+    <font size="6">
+    <p align="left">
+<script language="JavaScript1.2">
+
+var message="..........Flora schrok ineens wakker! Wat had ze lekker geslapen! Ze had alleen wel gek gedroomd. Over haar verjaardag en dat terwijl ze het nooit vierde! Dat had ze zelfs nog tegen Bo gezegd. ‘Hé raar’ dacht Flora, ‘het leek net of dat echt gebeurd was. Wat raar kon je som toch dromen!’ Flora stond op en ging eens een wandelingetje maken. Aha, daar zag ze meneer konijn praten met mevrouw kikker. Maar toen Flora dichterbij kwam, hielden ze plotseling op met praten! ‘Is er iets?’ vroeg Flora. Wat zou er moeten zijn dan?’ vroeg meneer konijn. ‘Dan is het goed’, zei Flora en liep verder. Even verderop zaten meneer uil en Bo de postduif met druk met elkaar te praten op een tak in de boom. Flora vloog erheen, maar toen ze er vlakbij waren hielden ze plotseling op. ‘Is er iets?’ vroeg Flora. ‘Nee hoor’ zei Bo. ‘Wat zou er moeten zijn?’ ‘Oh, dan is het goed’ zei Flora en ze ging weer verder.";//hiervoor je tekst
+var neonbasecolor="black"
+var neontextcolor="pink"
+var flashspeed=103  //in milliseconds
+
+///No need to edit below this line/////
+
+var n=0
+if (document.all||document.getElementById){
+document.write('<font color="'+neonbasecolor+'">')
+for (m=0;m<message.length;m++)
+document.write('<span id="neonlight'+m+'">'+message.charAt(m)+'</span>')
+document.write('</font>')
+}
+else
+document.write(message)
+
+function crossref(number){
+var crossobj=document.all? eval("document.all.neonlight"+number) : document.getElementById("neonlight"+number)
+return crossobj
+}
+
+function neon(){
+
+//Change all letters to base color
+if (n==0){
+for (m=0;m<message.length;m++)
+//eval("document.all.neonlight"+m).style.color=neonbasecolor
+crossref(m).style.color=neonbasecolor
+}
+
+//cycle through and change individual letters to neon color
+crossref(n).style.color=neontextcolor
+
+if (n<message.length-1)
+n++
+else{
+n=0
+clearInterval(flashing)
+setTimeout("beginneon()",1500)
+return
+}
+}
+
+function beginneon(){
+if (document.all||document.getElementById)
+flashing=setInterval("neon()",flashspeed)
+}
+beginneon()
+
+
+</script>
+
+    </font>
+    
+    <p align="left">&nbsp;</td>
+    </tr>
+  <tr>
+    <td style="font-family: Times New Roman; font-size: 14pt" bgcolor="#00FFFF" align="center" width="32%">
+    <span style="background-color: #FFFF00; font-weight:700">
+    <font size="3" color="#FF0000"><a target="_parent" href="menu.htm">
+    menu</a></font></span></td>
+    <td style="font-family: Times New Roman; font-size: 14pt" bgcolor="#FF0000" align="center" width="32%">
+    AVI 7 beheersing</td>
+    <td style="font-family: Times New Roman; font-size: 14pt" bgcolor="#00FF00" align="center" width="32%">
+    <font size="3" color="#FF0000">
+    <span style="background-color: #FFFF00; font-weight:700">
+    <a target="_self" href="avi7niveaubw7e.htm">opnieuw</a></span></font></td>
+  </tr>
+  </table>
+</div>
+</body>
+
+</html>

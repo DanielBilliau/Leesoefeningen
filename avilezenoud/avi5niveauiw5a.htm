@@ -1,0 +1,90 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>AVI-lezen</title>
+</head>
+
+<body bgcolor="#C0C0C0" background="prinses.jpg">
+<div align="center">
+<table border="3" width="96%" height="80" bordercolor="#008000" id="table1">
+  <tr>
+    <td style="font-family: Times New Roman; font-size: 14pt" bgcolor="#FFFF00" width="96%" colspan="3">
+    <font size="6">
+    <p align="left">
+<script language="JavaScript1.2">
+
+var message=".......Rik en Leen hebben oude kleren aan. Zo mogen ze naar de zolder. Vlug rennen ze de trap op. Ze steken het licht aan. We moeten eerst opruimen en daarna poetsen. Achter een gele fiets staat een grote kast. Rik trekt de deur open. Komen kijken, Leen, roept hij. De kast ligt vol met rommel. Een wandelstok,... dat wordt een toverstaf. Een trommel, oude spullen van grootvader, kleren, hoeden, een schommelpaard, een doosje met parels... Rik neemt een hoge, zwarte hoed. Hij schrikt! Hij hoort geritsel! Hij verstopt zich achter een kist. Wat was dat, Leen? Een prater met een grote mond ben jij! Dat was een muis, een gewone grijze muis. Bleke Rik krijgt een kleurtje. Dat dier heeft een gat in de hoed gebeten. We moeten ze vangen! Ik weet wat beter! We gaan ons verkleden. Jij bent de rijke prins met de toverstaf. En ik de prinses met een gouden kroontje.";//hiervoor je tekst
+var neonbasecolor="black"
+var neontextcolor="pink"
+var flashspeed=190  //in milliseconds
+
+///No need to edit below this line/////
+
+var n=0
+if (document.all||document.getElementById){
+document.write('<font color="'+neonbasecolor+'">')
+for (m=0;m<message.length;m++)
+document.write('<span id="neonlight'+m+'">'+message.charAt(m)+'</span>')
+document.write('</font>')
+}
+else
+document.write(message)
+
+function crossref(number){
+var crossobj=document.all? eval("document.all.neonlight"+number) : document.getElementById("neonlight"+number)
+return crossobj
+}
+
+function neon(){
+
+//Change all letters to base color
+if (n==0){
+for (m=0;m<message.length;m++)
+//eval("document.all.neonlight"+m).style.color=neonbasecolor
+crossref(m).style.color=neonbasecolor
+}
+
+//cycle through and change individual letters to neon color
+crossref(n).style.color=neontextcolor
+
+if (n<message.length-1)
+n++
+else{
+n=0
+clearInterval(flashing)
+setTimeout("beginneon()",1500)
+return
+}
+}
+
+function beginneon(){
+if (document.all||document.getElementById)
+flashing=setInterval("neon()",flashspeed)
+}
+beginneon()
+
+
+</script>
+
+    </font>
+    
+    <p align="left">&nbsp;</td>
+    </tr>
+  <tr>
+    <td style="font-family: Times New Roman; font-size: 14pt" bgcolor="#00FFFF" align="center" width="32%">
+    <span style="background-color: #FFFF00; font-weight:700">
+    <font size="3" color="#FF0000"><a target="_parent" href="menu.htm">
+    menu</a></font></span></td>
+    <td style="font-family: Times New Roman; font-size: 14pt" bgcolor="#FF0000" align="center" width="32%">
+    AVI 5 instructie</td>
+    <td style="font-family: Times New Roman; font-size: 14pt" bgcolor="#00FF00" align="center" width="32%">
+    <font size="3" color="#FF0000">
+    <span style="background-color: #FFFF00; font-weight:700">
+    <a target="_self" href="avi5niveauiw5a.htm">opnieuw</a></span></font></td>
+  </tr>
+  </table>
+</div>
+</body>
+
+</html>

@@ -1,0 +1,90 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>AVI-lezen</title>
+</head>
+
+<body bgcolor="#C0C0C0" background="beest.jpg">
+<div align="center">
+<table border="3" width="96%" height="80" bordercolor="#008000" id="table1">
+  <tr>
+    <td style="font-family: Times New Roman; font-size: 14pt" bgcolor="#FFFF00" width="96%" colspan="3">
+    <font size="6">
+    <p align="left">
+<script language="JavaScript1.2">
+
+var message=".......Jaren later, in een dorpje niet zo ver van het kasteel, woonde Belle. Ze was een mooi en lief meisje, waar iedereen van hield. Ze woonde alleen met haar vader. Maurice heette hij. Hij was een uitvinder, maar dikwijls een beetje verstrooid. In het dorp werd een beetje met hem gelachen. Maar Belle verdedigde hem steeds. Op een dag vertrok hij met paard en kar naar de jaarmarkt om zijn nieuwste uitvinding, een houthakmachine, te tonen. Maar hij was nog niet ver van huis, of hij was al verdwaald in het donkere bos. Grommende wolven bedreigden hem en zijn paard. Het paard schrok en steigerde en Maurice viel. Toen het paard in paniek wegstormde, bleef de arme man alleen achter. In de verte zag hij gelukkig een lichtje branden. Toen hij het licht naderde, zag hij dat het van een kasteel kwam. Voorzichtig sloop hij naar de grote poort en klopte aan.";//hiervoor je tekst
+var neonbasecolor="black"
+var neontextcolor="pink"
+var flashspeed=190  //in milliseconds
+
+///No need to edit below this line/////
+
+var n=0
+if (document.all||document.getElementById){
+document.write('<font color="'+neonbasecolor+'">')
+for (m=0;m<message.length;m++)
+document.write('<span id="neonlight'+m+'">'+message.charAt(m)+'</span>')
+document.write('</font>')
+}
+else
+document.write(message)
+
+function crossref(number){
+var crossobj=document.all? eval("document.all.neonlight"+number) : document.getElementById("neonlight"+number)
+return crossobj
+}
+
+function neon(){
+
+//Change all letters to base color
+if (n==0){
+for (m=0;m<message.length;m++)
+//eval("document.all.neonlight"+m).style.color=neonbasecolor
+crossref(m).style.color=neonbasecolor
+}
+
+//cycle through and change individual letters to neon color
+crossref(n).style.color=neontextcolor
+
+if (n<message.length-1)
+n++
+else{
+n=0
+clearInterval(flashing)
+setTimeout("beginneon()",1500)
+return
+}
+}
+
+function beginneon(){
+if (document.all||document.getElementById)
+flashing=setInterval("neon()",flashspeed)
+}
+beginneon()
+
+
+</script>
+
+    </font>
+    
+    <p align="left">&nbsp;</td>
+    </tr>
+  <tr>
+    <td style="font-family: Times New Roman; font-size: 14pt" bgcolor="#00FFFF" align="center" width="32%">
+    <span style="background-color: #FFFF00; font-weight:700">
+    <font size="3" color="#FF0000"><a target="_parent" href="menu.htm">
+    menu</a></font></span></td>
+    <td style="font-family: Times New Roman; font-size: 14pt" bgcolor="#FF0000" align="center" width="32%">
+    AVI 5 instructie</td>
+    <td style="font-family: Times New Roman; font-size: 14pt" bgcolor="#00FF00" align="center" width="32%">
+    <font size="3" color="#FF0000">
+    <span style="background-color: #FFFF00; font-weight:700">
+    <a target="_self" href="avi5niveauiw5j.htm">opnieuw</a></span></font></td>
+  </tr>
+  </table>
+</div>
+</body>
+
+</html>

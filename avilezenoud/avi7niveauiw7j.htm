@@ -1,0 +1,90 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>AVI-lezen</title>
+</head>
+
+<body bgcolor="#C0C0C0" background="mowgli.jpg">
+<div align="center">
+<table border="3" width="96%" height="80" bordercolor="#008000" id="table1">
+  <tr>
+    <td style="font-family: Times New Roman; font-size: 14pt" bgcolor="#FFFF00" width="96%" colspan="3">
+    <font size="6">
+    <p align="left">
+<script language="JavaScript1.2">
+
+var message="..........Op zekere dag vond Bagheera, de zwarte panter, een drijvend mandje op de rivier. Daarin lag een klein mensenkind onophoudelijk te huilen. Bagheera herinnerde zich dat wolvin, die in de buurt woonde, pas een nest welpen had geworpen. Ze pakte het mandje met het vondelingetje van de rivier en zette het mandje voor de ingang van hun hol. Moeder wolf en haar welpjes kwamen naar buiten toen ze het gehuil van het mensenjong hoorden. Toen de baby hen zag, stopte hij met huilen en toverde een glimlach op zijn lippen. Het mensenkind had een thuis gevonden. Er gingen tien jaar voorbij. Mowgli groeide samen met zijn wolvenbroertjes op tot een gezond en sterk jongetje. Hij was zonder problemen opgenomen in de kudde wolven. Maar op een nacht riep Akela, de leider, alle wolven bij zich. ‘Het mensenkind moet hier weg’, sprak de oude wolf ernstig. ‘Shere Khan, de tijger is teruggekomen.’";//hiervoor je tekst
+var neonbasecolor="black"
+var neontextcolor="pink"
+var flashspeed=170  //in milliseconds
+
+///No need to edit below this line/////
+
+var n=0
+if (document.all||document.getElementById){
+document.write('<font color="'+neonbasecolor+'">')
+for (m=0;m<message.length;m++)
+document.write('<span id="neonlight'+m+'">'+message.charAt(m)+'</span>')
+document.write('</font>')
+}
+else
+document.write(message)
+
+function crossref(number){
+var crossobj=document.all? eval("document.all.neonlight"+number) : document.getElementById("neonlight"+number)
+return crossobj
+}
+
+function neon(){
+
+//Change all letters to base color
+if (n==0){
+for (m=0;m<message.length;m++)
+//eval("document.all.neonlight"+m).style.color=neonbasecolor
+crossref(m).style.color=neonbasecolor
+}
+
+//cycle through and change individual letters to neon color
+crossref(n).style.color=neontextcolor
+
+if (n<message.length-1)
+n++
+else{
+n=0
+clearInterval(flashing)
+setTimeout("beginneon()",1500)
+return
+}
+}
+
+function beginneon(){
+if (document.all||document.getElementById)
+flashing=setInterval("neon()",flashspeed)
+}
+beginneon()
+
+
+</script>
+
+    </font>
+    
+    <p align="left">&nbsp;</td>
+    </tr>
+  <tr>
+    <td style="font-family: Times New Roman; font-size: 14pt" bgcolor="#00FFFF" align="center" width="32%">
+    <span style="background-color: #FFFF00; font-weight:700">
+    <font size="3" color="#FF0000"><a target="_parent" href="menu.htm">
+    menu</a></font></span></td>
+    <td style="font-family: Times New Roman; font-size: 14pt" bgcolor="#FF0000" align="center" width="32%">
+    AVI 7 instructie</td>
+    <td style="font-family: Times New Roman; font-size: 14pt" bgcolor="#00FF00" align="center" width="32%">
+    <font size="3" color="#FF0000">
+    <span style="background-color: #FFFF00; font-weight:700">
+    <a target="_self" href="avi7niveauiw7j.htm">opnieuw</a></span></font></td>
+  </tr>
+  </table>
+</div>
+</body>
+
+</html>

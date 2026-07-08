@@ -1,0 +1,90 @@
+<html>
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<title>AVI-lezen</title>
+</head>
+
+<body bgcolor="#C0C0C0" background="draak3.jpg">
+<div align="center">
+<table border="3" width="96%" height="80" bordercolor="#008000" id="table1">
+  <tr>
+    <td style="font-family: Times New Roman; font-size: 14pt" bgcolor="#FFFF00" width="96%" colspan="3">
+    <font size="6">
+    <p align="left">
+<script language="JavaScript1.2">
+
+var message=".......Piet is een mooie draak. Zijn lijf is zo heet als vuur. Daarom woont hij in een groot huis van ijs. Een gewoon huis zou in brand vliegen. Piet mag binnen geen vuur spugen, dan smelt het ijs van de muren. Hij vindt het moeilijk om zijn vlam binnen te houden. Elke dag gaat hij met de andere draakjes naar school. Die is ook van ijs. De dag begint met vliegles. Piet vliegt het hoogst van allemaal. Meester draak ziet hem en roept: kom eens gauw hier. Draken mogen niet zo hoog vliegen. Daar boven, bij de wolken, gaan wij hijgen en wie hijgt spuugt ook vuur. Een wolk lijkt lief en zacht. Maar als hij vuur ziet, wordt hij een boze reus en maakt hij van het vuur een bliksem. Dan tovert hij een harde donder en rolt die naar je toe. Dat is gevaarlijk. Je mag nooit naar de wolken vliegen. Piet kijkt naar boven en zegt: Hoe weet u dat allemaal meester?";//hiervoor je tekst
+var neonbasecolor="black"
+var neontextcolor="pink"
+var flashspeed=190  //in milliseconds
+
+///No need to edit below this line/////
+
+var n=0
+if (document.all||document.getElementById){
+document.write('<font color="'+neonbasecolor+'">')
+for (m=0;m<message.length;m++)
+document.write('<span id="neonlight'+m+'">'+message.charAt(m)+'</span>')
+document.write('</font>')
+}
+else
+document.write(message)
+
+function crossref(number){
+var crossobj=document.all? eval("document.all.neonlight"+number) : document.getElementById("neonlight"+number)
+return crossobj
+}
+
+function neon(){
+
+//Change all letters to base color
+if (n==0){
+for (m=0;m<message.length;m++)
+//eval("document.all.neonlight"+m).style.color=neonbasecolor
+crossref(m).style.color=neonbasecolor
+}
+
+//cycle through and change individual letters to neon color
+crossref(n).style.color=neontextcolor
+
+if (n<message.length-1)
+n++
+else{
+n=0
+clearInterval(flashing)
+setTimeout("beginneon()",1500)
+return
+}
+}
+
+function beginneon(){
+if (document.all||document.getElementById)
+flashing=setInterval("neon()",flashspeed)
+}
+beginneon()
+
+
+</script>
+
+    </font>
+    
+    <p align="left">&nbsp;</td>
+    </tr>
+  <tr>
+    <td style="font-family: Times New Roman; font-size: 14pt" bgcolor="#00FFFF" align="center" width="32%">
+    <span style="background-color: #FFFF00; font-weight:700">
+    <font size="3" color="#FF0000"><a target="_parent" href="menu.htm">
+    menu</a></font></span></td>
+    <td style="font-family: Times New Roman; font-size: 14pt" bgcolor="#FF0000" align="center" width="32%">
+    AVI 5 instructie</td>
+    <td style="font-family: Times New Roman; font-size: 14pt" bgcolor="#00FF00" align="center" width="32%">
+    <font size="3" color="#FF0000">
+    <span style="background-color: #FFFF00; font-weight:700">
+    <a target="_self" href="avi5niveauiw5f.htm">opnieuw</a></span></font></td>
+  </tr>
+  </table>
+</div>
+</body>
+
+</html>
