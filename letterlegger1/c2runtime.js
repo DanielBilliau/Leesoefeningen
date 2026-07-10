@@ -23992,15 +23992,15 @@ cr.behaviors.DragnDrop = function(runtime)
 	behaviorProto.exps = new Exps();
 }());
 cr.getObjectRefTable = function () { return [
+	cr.plugins_.NinePatch,
 	cr.plugins_.Audio,
+	cr.plugins_.Button,
 	cr.plugins_.c2canvas,
 	cr.plugins_.Browser,
-	cr.plugins_.Button,
 	cr.plugins_.Sprite,
 	cr.plugins_.Text,
-	cr.plugins_.TiledBg,
 	cr.plugins_.Touch,
-	cr.plugins_.NinePatch,
+	cr.plugins_.TiledBg,
 	cr.behaviors.DragnDrop,
 	cr.system_object.prototype.cnds.OnLayoutStart,
 	cr.plugins_.Audio.prototype.acts.PreloadByName,
