@@ -1,0 +1,70 @@
+1.Over welk dier gaat het hier ?;
+een leeuw;
+een tijger;
+een olifant;
+een krokodil;
+een leeuw;
+|
+2.Hoe noemt de leeuw ?;
+Bert;
+Katrien;
+Samson;
+Floris;
+Samson;
+|
+3.Waar gebeurt het verhaal ?;
+in het circus;
+in het bos;
+in de woestijn;
+in de klas;
+in het circus;
+|
+4.Waar gaat hij op zitten ?;
+op een kruk;
+op een bank;
+op een tafel;
+op een kast;
+op een kruk;
+|
+5.Waar springt hij door ?;
+door het vuur;
+door een deur;
+door een hoepel;
+door het venster;
+door een hoepel;
+|
+6.Wat hangt er aan de riem ?;
+een kist;
+een mandje;
+een stuk vlees;
+een vis;
+een mandje;
+|
+7.Van wie is de poes ?;
+van de temmer;
+van Mira;
+van August;
+van de bakker;
+van August;
+|
+8.Wie leerde dit kunstje ?;
+de directeur;
+de circusbaas;
+de dierentemmer;
+de clown;
+de dierentemmer;
+|
+9.Wat doen de mensen ?;
+naar huis gaan;
+hard schreeuwen;
+in de handen klappen;
+fluiten;
+in de handen klappen;
+|
+10.Wat doet Samson als laatste ?;
+een dutje doen;
+de poes verjagen;
+veel eten;
+tuimelen;
+een dutje doen;
+|
