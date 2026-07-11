@@ -15220,6 +15220,1034 @@ cr.system_object.prototype.loadFromJSON = function (o)
 cr.shaders = {};
 ;
 ;
+cr.plugins_.AJAX = function(runtime)
+{
+	this.runtime = runtime;
+};
+(function ()
+{
+	var isNWjs = false;
+	var path = null;
+	var fs = null;
+	var nw_appfolder = "";
+	var pluginProto = cr.plugins_.AJAX.prototype;
+	pluginProto.Type = function(plugin)
+	{
+		this.plugin = plugin;
+		this.runtime = plugin.runtime;
+	};
+	var typeProto = pluginProto.Type.prototype;
+	typeProto.onCreate = function()
+	{
+	};
+	pluginProto.Instance = function(type)
+	{
+		this.type = type;
+		this.runtime = type.runtime;
+		this.lastData = "";
+		this.curTag = "";
+		this.progress = 0;
+		this.timeout = -1;
+		isNWjs = this.runtime.isNWjs;
+		if (isNWjs)
+		{
+			path = require("path");
+			fs = require("fs");
+			var process = window["process"] || nw["process"];
+			nw_appfolder = path["dirname"](process["execPath"]) + "\\";
+		}
+	};
+	var instanceProto = pluginProto.Instance.prototype;
+	var theInstance = null;
+	window["C2_AJAX_DCSide"] = function (event_, tag_, param_)
+	{
+		if (!theInstance)
+			return;
+		if (event_ === "success")
+		{
+			theInstance.curTag = tag_;
+			theInstance.lastData = param_;
+			theInstance.runtime.trigger(cr.plugins_.AJAX.prototype.cnds.OnAnyComplete, theInstance);
+			theInstance.runtime.trigger(cr.plugins_.AJAX.prototype.cnds.OnComplete, theInstance);
+		}
+		else if (event_ === "error")
+		{
+			theInstance.curTag = tag_;
+			theInstance.runtime.trigger(cr.plugins_.AJAX.prototype.cnds.OnAnyError, theInstance);
+			theInstance.runtime.trigger(cr.plugins_.AJAX.prototype.cnds.OnError, theInstance);
+		}
+		else if (event_ === "progress")
+		{
+			theInstance.progress = param_;
+			theInstance.curTag = tag_;
+			theInstance.runtime.trigger(cr.plugins_.AJAX.prototype.cnds.OnProgress, theInstance);
+		}
+	};
+	instanceProto.onCreate = function()
+	{
+		theInstance = this;
+	};
+	instanceProto.saveToJSON = function ()
+	{
+		return { "lastData": this.lastData };
+	};
+	instanceProto.loadFromJSON = function (o)
+	{
+		this.lastData = o["lastData"];
+		this.curTag = "";
+		this.progress = 0;
+	};
+	var next_request_headers = {};
+	var next_override_mime = "";
+	instanceProto.doRequest = function (tag_, url_, method_, data_)
+	{
+		if (this.runtime.isDirectCanvas)
+		{
+			AppMobi["webview"]["execute"]('C2_AJAX_WebSide("' + tag_ + '", "' + url_ + '", "' + method_ + '", ' + (data_ ? '"' + data_ + '"' : "null") + ');');
+			return;
+		}
+		var self = this;
+		var request = null;
+		var doErrorFunc = function ()
+		{
+			self.curTag = tag_;
+			self.runtime.trigger(cr.plugins_.AJAX.prototype.cnds.OnAnyError, self);
+			self.runtime.trigger(cr.plugins_.AJAX.prototype.cnds.OnError, self);
+		};
+		var errorFunc = function ()
+		{
+			if (isNWjs)
+			{
+				var filepath = nw_appfolder + url_;
+				if (fs["existsSync"](filepath))
+				{
+					fs["readFile"](filepath, {"encoding": "utf8"}, function (err, data) {
+						if (err)
+						{
+							doErrorFunc();
+							return;
+						}
+						self.curTag = tag_;
+						self.lastData = data.replace(/\r\n/g, "\n")
+						self.runtime.trigger(cr.plugins_.AJAX.prototype.cnds.OnAnyComplete, self);
+						self.runtime.trigger(cr.plugins_.AJAX.prototype.cnds.OnComplete, self);
+					});
+				}
+				else
+					doErrorFunc();
+			}
+			else
+				doErrorFunc();
+		};
+		var progressFunc = function (e)
+		{
+			if (!e["lengthComputable"])
+				return;
+			self.progress = e.loaded / e.total;
+			self.curTag = tag_;
+			self.runtime.trigger(cr.plugins_.AJAX.prototype.cnds.OnProgress, self);
+		};
+		try
+		{
+			if (this.runtime.isWindowsPhone8)
+				request = new ActiveXObject("Microsoft.XMLHTTP");
+			else
+				request = new XMLHttpRequest();
+			request.onreadystatechange = function()
+			{
+				if (request.readyState === 4)
+				{
+					self.curTag = tag_;
+					if (request.responseText)
+						self.lastData = request.responseText.replace(/\r\n/g, "\n");		// fix windows style line endings
+					else
+						self.lastData = "";
+					if (request.status >= 400)
+					{
+						self.runtime.trigger(cr.plugins_.AJAX.prototype.cnds.OnAnyError, self);
+						self.runtime.trigger(cr.plugins_.AJAX.prototype.cnds.OnError, self);
+					}
+					else
+					{
+						if ((!isNWjs || self.lastData.length) && !(!isNWjs && request.status === 0 && !self.lastData.length))
+						{
+							self.runtime.trigger(cr.plugins_.AJAX.prototype.cnds.OnAnyComplete, self);
+							self.runtime.trigger(cr.plugins_.AJAX.prototype.cnds.OnComplete, self);
+						}
+					}
+				}
+			};
+			if (!this.runtime.isWindowsPhone8)
+			{
+				request.onerror = errorFunc;
+				request.ontimeout = errorFunc;
+				request.onabort = errorFunc;
+				request["onprogress"] = progressFunc;
+			}
+			request.open(method_, url_);
+			if (!this.runtime.isWindowsPhone8)
+			{
+				if (this.timeout >= 0 && typeof request["timeout"] !== "undefined")
+					request["timeout"] = this.timeout;
+			}
+			try {
+				request.responseType = "text";
+			} catch (e) {}
+			if (data_)
+			{
+				if (request["setRequestHeader"] && !next_request_headers.hasOwnProperty("Content-Type"))
+				{
+					request["setRequestHeader"]("Content-Type", "application/x-www-form-urlencoded");
+				}
+			}
+			if (request["setRequestHeader"])
+			{
+				var p;
+				for (p in next_request_headers)
+				{
+					if (next_request_headers.hasOwnProperty(p))
+					{
+						try {
+							request["setRequestHeader"](p, next_request_headers[p]);
+						}
+						catch (e) {}
+					}
+				}
+				next_request_headers = {};
+			}
+			if (next_override_mime && request["overrideMimeType"])
+			{
+				try {
+					request["overrideMimeType"](next_override_mime);
+				}
+				catch (e) {}
+				next_override_mime = "";
+			}
+			if (data_)
+				request.send(data_);
+			else
+				request.send();
+		}
+		catch (e)
+		{
+			errorFunc();
+		}
+	};
+	function Cnds() {};
+	Cnds.prototype.OnComplete = function (tag)
+	{
+		return cr.equals_nocase(tag, this.curTag);
+	};
+	Cnds.prototype.OnAnyComplete = function (tag)
+	{
+		return true;
+	};
+	Cnds.prototype.OnError = function (tag)
+	{
+		return cr.equals_nocase(tag, this.curTag);
+	};
+	Cnds.prototype.OnAnyError = function (tag)
+	{
+		return true;
+	};
+	Cnds.prototype.OnProgress = function (tag)
+	{
+		return cr.equals_nocase(tag, this.curTag);
+	};
+	pluginProto.cnds = new Cnds();
+	function Acts() {};
+	Acts.prototype.Request = function (tag_, url_)
+	{
+		var self = this;
+		if (this.runtime.isWKWebView && !this.runtime.isAbsoluteUrl(url_))
+		{
+			this.runtime.fetchLocalFileViaCordovaAsText(url_,
+			function (str)
+			{
+				self.curTag = tag_;
+				self.lastData = str.replace(/\r\n/g, "\n");		// fix windows style line endings
+				self.runtime.trigger(cr.plugins_.AJAX.prototype.cnds.OnAnyComplete, self);
+				self.runtime.trigger(cr.plugins_.AJAX.prototype.cnds.OnComplete, self);
+			},
+			function (err)
+			{
+				self.curTag = tag_;
+				self.runtime.trigger(cr.plugins_.AJAX.prototype.cnds.OnAnyError, self);
+				self.runtime.trigger(cr.plugins_.AJAX.prototype.cnds.OnError, self);
+			});
+		}
+		else
+		{
+			this.doRequest(tag_, url_, "GET");
+		}
+	};
+	Acts.prototype.RequestFile = function (tag_, file_)
+	{
+		var self = this;
+		if (this.runtime.isWKWebView)
+		{
+			this.runtime.fetchLocalFileViaCordovaAsText(file_,
+			function (str)
+			{
+				self.curTag = tag_;
+				self.lastData = str.replace(/\r\n/g, "\n");		// fix windows style line endings
+				self.runtime.trigger(cr.plugins_.AJAX.prototype.cnds.OnAnyComplete, self);
+				self.runtime.trigger(cr.plugins_.AJAX.prototype.cnds.OnComplete, self);
+			},
+			function (err)
+			{
+				self.curTag = tag_;
+				self.runtime.trigger(cr.plugins_.AJAX.prototype.cnds.OnAnyError, self);
+				self.runtime.trigger(cr.plugins_.AJAX.prototype.cnds.OnError, self);
+			});
+		}
+		else
+		{
+			this.doRequest(tag_, file_, "GET");
+		}
+	};
+	Acts.prototype.Post = function (tag_, url_, data_, method_)
+	{
+		this.doRequest(tag_, url_, method_, data_);
+	};
+	Acts.prototype.SetTimeout = function (t)
+	{
+		this.timeout = t * 1000;
+	};
+	Acts.prototype.SetHeader = function (n, v)
+	{
+		next_request_headers[n] = v;
+	};
+	Acts.prototype.OverrideMIMEType = function (m)
+	{
+		next_override_mime = m;
+	};
+	pluginProto.acts = new Acts();
+	function Exps() {};
+	Exps.prototype.LastData = function (ret)
+	{
+		ret.set_string(this.lastData);
+	};
+	Exps.prototype.Progress = function (ret)
+	{
+		ret.set_float(this.progress);
+	};
+	Exps.prototype.Tag = function (ret)
+	{
+		ret.set_string(this.curTag);
+	};
+	pluginProto.exps = new Exps();
+}());
+;
+;
+cr.plugins_.Arr = function(runtime)
+{
+	this.runtime = runtime;
+};
+(function ()
+{
+	var pluginProto = cr.plugins_.Arr.prototype;
+	pluginProto.Type = function(plugin)
+	{
+		this.plugin = plugin;
+		this.runtime = plugin.runtime;
+	};
+	var typeProto = pluginProto.Type.prototype;
+	typeProto.onCreate = function()
+	{
+	};
+	pluginProto.Instance = function(type)
+	{
+		this.type = type;
+		this.runtime = type.runtime;
+	};
+	var instanceProto = pluginProto.Instance.prototype;
+	var arrCache = [];
+	function allocArray()
+	{
+		if (arrCache.length)
+			return arrCache.pop();
+		else
+			return [];
+	};
+	if (!Array.isArray)
+	{
+		Array.isArray = function (vArg) {
+			return Object.prototype.toString.call(vArg) === "[object Array]";
+		};
+	}
+	function freeArray(a)
+	{
+		var i, len;
+		for (i = 0, len = a.length; i < len; i++)
+		{
+			if (Array.isArray(a[i]))
+				freeArray(a[i]);
+		}
+		cr.clearArray(a);
+		arrCache.push(a);
+	};
+	instanceProto.onCreate = function()
+	{
+		this.cx = this.properties[0];
+		this.cy = this.properties[1];
+		this.cz = this.properties[2];
+		if (!this.recycled)
+			this.arr = allocArray();
+		var a = this.arr;
+		a.length = this.cx;
+		var x, y, z;
+		for (x = 0; x < this.cx; x++)
+		{
+			if (!a[x])
+				a[x] = allocArray();
+			a[x].length = this.cy;
+			for (y = 0; y < this.cy; y++)
+			{
+				if (!a[x][y])
+					a[x][y] = allocArray();
+				a[x][y].length = this.cz;
+				for (z = 0; z < this.cz; z++)
+					a[x][y][z] = 0;
+			}
+		}
+		this.forX = [];
+		this.forY = [];
+		this.forZ = [];
+		this.forDepth = -1;
+	};
+	instanceProto.onDestroy = function ()
+	{
+		var x;
+		for (x = 0; x < this.cx; x++)
+			freeArray(this.arr[x]);		// will recurse down and recycle other arrays
+		cr.clearArray(this.arr);
+	};
+	instanceProto.at = function (x, y, z)
+	{
+		x = Math.floor(x);
+		y = Math.floor(y);
+		z = Math.floor(z);
+		if (isNaN(x) || x < 0 || x > this.cx - 1)
+			return 0;
+		if (isNaN(y) || y < 0 || y > this.cy - 1)
+			return 0;
+		if (isNaN(z) || z < 0 || z > this.cz - 1)
+			return 0;
+		return this.arr[x][y][z];
+	};
+	instanceProto.set = function (x, y, z, val)
+	{
+		x = Math.floor(x);
+		y = Math.floor(y);
+		z = Math.floor(z);
+		if (isNaN(x) || x < 0 || x > this.cx - 1)
+			return;
+		if (isNaN(y) || y < 0 || y > this.cy - 1)
+			return;
+		if (isNaN(z) || z < 0 || z > this.cz - 1)
+			return;
+		this.arr[x][y][z] = val;
+	};
+	instanceProto.getAsJSON = function ()
+	{
+		return JSON.stringify({
+			"c2array": true,
+			"size": [this.cx, this.cy, this.cz],
+			"data": this.arr
+		});
+	};
+	instanceProto.saveToJSON = function ()
+	{
+		return {
+			"size": [this.cx, this.cy, this.cz],
+			"data": this.arr
+		};
+	};
+	instanceProto.loadFromJSON = function (o)
+	{
+		var sz = o["size"];
+		this.cx = sz[0];
+		this.cy = sz[1];
+		this.cz = sz[2];
+		this.arr = o["data"];
+	};
+	instanceProto.setSize = function (w, h, d)
+	{
+		if (w < 0) w = 0;
+		if (h < 0) h = 0;
+		if (d < 0) d = 0;
+		if (this.cx === w && this.cy === h && this.cz === d)
+			return;		// no change
+		this.cx = w;
+		this.cy = h;
+		this.cz = d;
+		var x, y, z;
+		var a = this.arr;
+		a.length = w;
+		for (x = 0; x < this.cx; x++)
+		{
+			if (cr.is_undefined(a[x]))
+				a[x] = allocArray();
+			a[x].length = h;
+			for (y = 0; y < this.cy; y++)
+			{
+				if (cr.is_undefined(a[x][y]))
+					a[x][y] = allocArray();
+				a[x][y].length = d;
+				for (z = 0; z < this.cz; z++)
+				{
+					if (cr.is_undefined(a[x][y][z]))
+						a[x][y][z] = 0;
+				}
+			}
+		}
+	};
+	instanceProto.getForX = function ()
+	{
+		if (this.forDepth >= 0 && this.forDepth < this.forX.length)
+			return this.forX[this.forDepth];
+		else
+			return 0;
+	};
+	instanceProto.getForY = function ()
+	{
+		if (this.forDepth >= 0 && this.forDepth < this.forY.length)
+			return this.forY[this.forDepth];
+		else
+			return 0;
+	};
+	instanceProto.getForZ = function ()
+	{
+		if (this.forDepth >= 0 && this.forDepth < this.forZ.length)
+			return this.forZ[this.forDepth];
+		else
+			return 0;
+	};
+	function Cnds() {};
+	Cnds.prototype.CompareX = function (x, cmp, val)
+	{
+		return cr.do_cmp(this.at(x, 0, 0), cmp, val);
+	};
+	Cnds.prototype.CompareXY = function (x, y, cmp, val)
+	{
+		return cr.do_cmp(this.at(x, y, 0), cmp, val);
+	};
+	Cnds.prototype.CompareXYZ = function (x, y, z, cmp, val)
+	{
+		return cr.do_cmp(this.at(x, y, z), cmp, val);
+	};
+	instanceProto.doForEachTrigger = function (current_event)
+	{
+		this.runtime.pushCopySol(current_event.solModifiers);
+		current_event.retrigger();
+		this.runtime.popSol(current_event.solModifiers);
+	};
+	Cnds.prototype.ArrForEach = function (dims)
+	{
+        var current_event = this.runtime.getCurrentEventStack().current_event;
+		this.forDepth++;
+		var forDepth = this.forDepth;
+		if (forDepth === this.forX.length)
+		{
+			this.forX.push(0);
+			this.forY.push(0);
+			this.forZ.push(0);
+		}
+		else
+		{
+			this.forX[forDepth] = 0;
+			this.forY[forDepth] = 0;
+			this.forZ[forDepth] = 0;
+		}
+		switch (dims) {
+		case 0:
+			for (this.forX[forDepth] = 0; this.forX[forDepth] < this.cx; this.forX[forDepth]++)
+			{
+				for (this.forY[forDepth] = 0; this.forY[forDepth] < this.cy; this.forY[forDepth]++)
+				{
+					for (this.forZ[forDepth] = 0; this.forZ[forDepth] < this.cz; this.forZ[forDepth]++)
+					{
+						this.doForEachTrigger(current_event);
+					}
+				}
+			}
+			break;
+		case 1:
+			for (this.forX[forDepth] = 0; this.forX[forDepth] < this.cx; this.forX[forDepth]++)
+			{
+				for (this.forY[forDepth] = 0; this.forY[forDepth] < this.cy; this.forY[forDepth]++)
+				{
+					this.doForEachTrigger(current_event);
+				}
+			}
+			break;
+		case 2:
+			for (this.forX[forDepth] = 0; this.forX[forDepth] < this.cx; this.forX[forDepth]++)
+			{
+				this.doForEachTrigger(current_event);
+			}
+			break;
+		}
+		this.forDepth--;
+		return false;
+	};
+	Cnds.prototype.CompareCurrent = function (cmp, val)
+	{
+		return cr.do_cmp(this.at(this.getForX(), this.getForY(), this.getForZ()), cmp, val);
+	};
+	Cnds.prototype.Contains = function(val)
+	{
+		var x, y, z;
+		for (x = 0; x < this.cx; x++)
+		{
+			for (y = 0; y < this.cy; y++)
+			{
+				for (z = 0; z < this.cz; z++)
+				{
+					if (this.arr[x][y][z] === val)
+						return true;
+				}
+			}
+		}
+		return false;
+	};
+	Cnds.prototype.IsEmpty = function ()
+	{
+		return this.cx === 0 || this.cy === 0 || this.cz === 0;
+	};
+	Cnds.prototype.CompareSize = function (axis, cmp, value)
+	{
+		var s = 0;
+		switch (axis) {
+		case 0:
+			s = this.cx;
+			break;
+		case 1:
+			s = this.cy;
+			break;
+		case 2:
+			s = this.cz;
+			break;
+		}
+		return cr.do_cmp(s, cmp, value);
+	};
+	pluginProto.cnds = new Cnds();
+	function Acts() {};
+	Acts.prototype.Clear = function ()
+	{
+		var x, y, z;
+		for (x = 0; x < this.cx; x++)
+			for (y = 0; y < this.cy; y++)
+				for (z = 0; z < this.cz; z++)
+					this.arr[x][y][z] = 0;
+	};
+	Acts.prototype.SetSize = function (w, h, d)
+	{
+		this.setSize(w, h, d);
+	};
+	Acts.prototype.SetX = function (x, val)
+	{
+		this.set(x, 0, 0, val);
+	};
+	Acts.prototype.SetXY = function (x, y, val)
+	{
+		this.set(x, y, 0, val);
+	};
+	Acts.prototype.SetXYZ = function (x, y, z, val)
+	{
+		this.set(x, y, z, val);
+	};
+	Acts.prototype.Push = function (where, value, axis)
+	{
+		var x = 0, y = 0, z = 0;
+		var a = this.arr;
+		switch (axis) {
+		case 0:	// X axis
+			if (where === 0)	// back
+			{
+				x = a.length;
+				a.push(allocArray());
+			}
+			else				// front
+			{
+				x = 0;
+				a.unshift(allocArray());
+			}
+			a[x].length = this.cy;
+			for ( ; y < this.cy; y++)
+			{
+				a[x][y] = allocArray();
+				a[x][y].length = this.cz;
+				for (z = 0; z < this.cz; z++)
+					a[x][y][z] = value;
+			}
+			this.cx++;
+			break;
+		case 1: // Y axis
+			for ( ; x < this.cx; x++)
+			{
+				if (where === 0)	// back
+				{
+					y = a[x].length;
+					a[x].push(allocArray());
+				}
+				else				// front
+				{
+					y = 0;
+					a[x].unshift(allocArray());
+				}
+				a[x][y].length = this.cz;
+				for (z = 0; z < this.cz; z++)
+					a[x][y][z] = value;
+			}
+			this.cy++;
+			break;
+		case 2:	// Z axis
+			for ( ; x < this.cx; x++)
+			{
+				for (y = 0; y < this.cy; y++)
+				{
+					if (where === 0)	// back
+					{
+						a[x][y].push(value);
+					}
+					else				// front
+					{
+						a[x][y].unshift(value);
+					}
+				}
+			}
+			this.cz++;
+			break;
+		}
+	};
+	Acts.prototype.Pop = function (where, axis)
+	{
+		var x = 0, y = 0, z = 0;
+		var a = this.arr;
+		switch (axis) {
+		case 0:	// X axis
+			if (this.cx === 0)
+				break;
+			if (where === 0)	// back
+			{
+				freeArray(a.pop());
+			}
+			else				// front
+			{
+				freeArray(a.shift());
+			}
+			this.cx--;
+			break;
+		case 1: // Y axis
+			if (this.cy === 0)
+				break;
+			for ( ; x < this.cx; x++)
+			{
+				if (where === 0)	// back
+				{
+					freeArray(a[x].pop());
+				}
+				else				// front
+				{
+					freeArray(a[x].shift());
+				}
+			}
+			this.cy--;
+			break;
+		case 2:	// Z axis
+			if (this.cz === 0)
+				break;
+			for ( ; x < this.cx; x++)
+			{
+				for (y = 0; y < this.cy; y++)
+				{
+					if (where === 0)	// back
+					{
+						a[x][y].pop();
+					}
+					else				// front
+					{
+						a[x][y].shift();
+					}
+				}
+			}
+			this.cz--;
+			break;
+		}
+	};
+	Acts.prototype.Reverse = function (axis)
+	{
+		var x = 0, y = 0, z = 0;
+		var a = this.arr;
+		if (this.cx === 0 || this.cy === 0 || this.cz === 0)
+			return;		// no point reversing empty array
+		switch (axis) {
+		case 0:	// X axis
+			a.reverse();
+			break;
+		case 1: // Y axis
+			for ( ; x < this.cx; x++)
+				a[x].reverse();
+			break;
+		case 2:	// Z axis
+			for ( ; x < this.cx; x++)
+				for (y = 0; y < this.cy; y++)
+					a[x][y].reverse();
+			break;
+		}
+	};
+	function compareValues(va, vb)
+	{
+		if (cr.is_number(va) && cr.is_number(vb))
+			return va - vb;
+		else
+		{
+			var sa = "" + va;
+			var sb = "" + vb;
+			if (sa < sb)
+				return -1;
+			else if (sa > sb)
+				return 1;
+			else
+				return 0;
+		}
+	}
+	Acts.prototype.Sort = function (axis)
+	{
+		var x = 0, y = 0, z = 0;
+		var a = this.arr;
+		if (this.cx === 0 || this.cy === 0 || this.cz === 0)
+			return;		// no point sorting empty array
+		switch (axis) {
+		case 0:	// X axis
+			a.sort(function (a, b) {
+				return compareValues(a[0][0], b[0][0]);
+			});
+			break;
+		case 1: // Y axis
+			for ( ; x < this.cx; x++)
+			{
+				a[x].sort(function (a, b) {
+					return compareValues(a[0], b[0]);
+				});
+			}
+			break;
+		case 2:	// Z axis
+			for ( ; x < this.cx; x++)
+			{
+				for (y = 0; y < this.cy; y++)
+				{
+					a[x][y].sort(compareValues);
+				}
+			}
+			break;
+		}
+	};
+	Acts.prototype.Delete = function (index, axis)
+	{
+		var x = 0, y = 0, z = 0;
+		index = Math.floor(index);
+		var a = this.arr;
+		if (index < 0)
+			return;
+		switch (axis) {
+		case 0:	// X axis
+			if (index >= this.cx)
+				break;
+			freeArray(a[index]);
+			a.splice(index, 1);
+			this.cx--;
+			break;
+		case 1: // Y axis
+			if (index >= this.cy)
+				break;
+			for ( ; x < this.cx; x++)
+			{
+				freeArray(a[x][index]);
+				a[x].splice(index, 1);
+			}
+			this.cy--;
+			break;
+		case 2:	// Z axis
+			if (index >= this.cz)
+				break;
+			for ( ; x < this.cx; x++)
+			{
+				for (y = 0; y < this.cy; y++)
+				{
+					a[x][y].splice(index, 1);
+				}
+			}
+			this.cz--;
+			break;
+		}
+	};
+	Acts.prototype.Insert = function (value, index, axis)
+	{
+		var x = 0, y = 0, z = 0;
+		index = Math.floor(index);
+		var a = this.arr;
+		if (index < 0)
+			return;
+		switch (axis) {
+		case 0:	// X axis
+			if (index > this.cx)
+				return;
+			x = index;
+			a.splice(x, 0, allocArray());
+			a[x].length = this.cy;
+			for ( ; y < this.cy; y++)
+			{
+				a[x][y] = allocArray();
+				a[x][y].length = this.cz;
+				for (z = 0; z < this.cz; z++)
+					a[x][y][z] = value;
+			}
+			this.cx++;
+			break;
+		case 1: // Y axis
+			if (index > this.cy)
+				return;
+			for ( ; x < this.cx; x++)
+			{
+				y = index;
+				a[x].splice(y, 0, allocArray());
+				a[x][y].length = this.cz;
+				for (z = 0; z < this.cz; z++)
+					a[x][y][z] = value;
+			}
+			this.cy++;
+			break;
+		case 2:	// Z axis
+			if (index > this.cz)
+				return;
+			for ( ; x < this.cx; x++)
+			{
+				for (y = 0; y < this.cy; y++)
+				{
+					a[x][y].splice(index, 0, value);
+				}
+			}
+			this.cz++;
+			break;
+		}
+	};
+	Acts.prototype.JSONLoad = function (json_)
+	{
+		var o;
+		try {
+			o = JSON.parse(json_);
+		}
+		catch(e) { return; }
+		if (!o["c2array"])		// presumably not a c2array object
+			return;
+		var sz = o["size"];
+		this.cx = sz[0];
+		this.cy = sz[1];
+		this.cz = sz[2];
+		this.arr = o["data"];
+	};
+	Acts.prototype.JSONDownload = function (filename)
+	{
+		var a = document.createElement("a");
+		if (typeof a.download === "undefined")
+		{
+			var str = 'data:text/html,' + encodeURIComponent("<p><a download='" + filename + "' href=\"data:application/json,"
+				+ encodeURIComponent(this.getAsJSON())
+				+ "\">Download link</a></p>");
+			window.open(str);
+		}
+		else
+		{
+			var body = document.getElementsByTagName("body")[0];
+			a.textContent = filename;
+			a.href = "data:application/json," + encodeURIComponent(this.getAsJSON());
+			a.download = filename;
+			body.appendChild(a);
+			var clickEvent = document.createEvent("MouseEvent");
+			clickEvent.initMouseEvent("click", true, true, window, 0, 0, 0, 0, 0, false, false, false, false, 0, null);
+			a.dispatchEvent(clickEvent);
+			body.removeChild(a);
+		}
+	};
+	pluginProto.acts = new Acts();
+	function Exps() {};
+	Exps.prototype.At = function (ret, x, y_, z_)
+	{
+		var y = y_ || 0;
+		var z = z_ || 0;
+		ret.set_any(this.at(x, y, z));
+	};
+	Exps.prototype.Width = function (ret)
+	{
+		ret.set_int(this.cx);
+	};
+	Exps.prototype.Height = function (ret)
+	{
+		ret.set_int(this.cy);
+	};
+	Exps.prototype.Depth = function (ret)
+	{
+		ret.set_int(this.cz);
+	};
+	Exps.prototype.CurX = function (ret)
+	{
+		ret.set_int(this.getForX());
+	};
+	Exps.prototype.CurY = function (ret)
+	{
+		ret.set_int(this.getForY());
+	};
+	Exps.prototype.CurZ = function (ret)
+	{
+		ret.set_int(this.getForZ());
+	};
+	Exps.prototype.CurValue = function (ret)
+	{
+		ret.set_any(this.at(this.getForX(), this.getForY(), this.getForZ()));
+	};
+	Exps.prototype.Front = function (ret)
+	{
+		ret.set_any(this.at(0, 0, 0));
+	};
+	Exps.prototype.Back = function (ret)
+	{
+		ret.set_any(this.at(this.cx - 1, 0, 0));
+	};
+	Exps.prototype.IndexOf = function (ret, v)
+	{
+		for (var i = 0; i < this.cx; i++)
+		{
+			if (this.arr[i][0][0] === v)
+			{
+				ret.set_int(i);
+				return;
+			}
+		}
+		ret.set_int(-1);
+	};
+	Exps.prototype.LastIndexOf = function (ret, v)
+	{
+		for (var i = this.cx - 1; i >= 0; i--)
+		{
+			if (this.arr[i][0][0] === v)
+			{
+				ret.set_int(i);
+				return;
+			}
+		}
+		ret.set_int(-1);
+	};
+	Exps.prototype.AsJSON = function (ret)
+	{
+		ret.set_string(this.getAsJSON());
+	};
+	pluginProto.exps = new Exps();
+}());
+;
+;
 cr.plugins_.Audio = function(runtime)
 {
 	this.runtime = runtime;
@@ -19122,6 +20150,1111 @@ cr.plugins_.Browser = function(runtime)
 }());
 ;
 ;
+cr.plugins_.Function = function(runtime)
+{
+	this.runtime = runtime;
+};
+(function ()
+{
+	var pluginProto = cr.plugins_.Function.prototype;
+	pluginProto.Type = function(plugin)
+	{
+		this.plugin = plugin;
+		this.runtime = plugin.runtime;
+	};
+	var typeProto = pluginProto.Type.prototype;
+	typeProto.onCreate = function()
+	{
+	};
+	pluginProto.Instance = function(type)
+	{
+		this.type = type;
+		this.runtime = type.runtime;
+	};
+	var instanceProto = pluginProto.Instance.prototype;
+	var funcStack = [];
+	var funcStackPtr = -1;
+	var isInPreview = false;	// set in onCreate
+	function FuncStackEntry()
+	{
+		this.name = "";
+		this.retVal = 0;
+		this.params = [];
+	};
+	function pushFuncStack()
+	{
+		funcStackPtr++;
+		if (funcStackPtr === funcStack.length)
+			funcStack.push(new FuncStackEntry());
+		return funcStack[funcStackPtr];
+	};
+	function getCurrentFuncStack()
+	{
+		if (funcStackPtr < 0)
+			return null;
+		return funcStack[funcStackPtr];
+	};
+	function getOneAboveFuncStack()
+	{
+		if (!funcStack.length)
+			return null;
+		var i = funcStackPtr + 1;
+		if (i >= funcStack.length)
+			i = funcStack.length - 1;
+		return funcStack[i];
+	};
+	function popFuncStack()
+	{
+;
+		funcStackPtr--;
+	};
+	instanceProto.onCreate = function()
+	{
+		isInPreview = (typeof cr_is_preview !== "undefined");
+		var self = this;
+		window["c2_callFunction"] = function (name_, params_)
+		{
+			var i, len, v;
+			var fs = pushFuncStack();
+			fs.name = name_.toLowerCase();
+			fs.retVal = 0;
+			if (params_)
+			{
+				fs.params.length = params_.length;
+				for (i = 0, len = params_.length; i < len; ++i)
+				{
+					v = params_[i];
+					if (typeof v === "number" || typeof v === "string")
+						fs.params[i] = v;
+					else if (typeof v === "boolean")
+						fs.params[i] = (v ? 1 : 0);
+					else
+						fs.params[i] = 0;
+				}
+			}
+			else
+			{
+				cr.clearArray(fs.params);
+			}
+			self.runtime.trigger(cr.plugins_.Function.prototype.cnds.OnFunction, self, fs.name);
+			popFuncStack();
+			return fs.retVal;
+		};
+	};
+	function Cnds() {};
+	Cnds.prototype.OnFunction = function (name_)
+	{
+		var fs = getCurrentFuncStack();
+		if (!fs)
+			return false;
+		return cr.equals_nocase(name_, fs.name);
+	};
+	Cnds.prototype.CompareParam = function (index_, cmp_, value_)
+	{
+		var fs = getCurrentFuncStack();
+		if (!fs)
+			return false;
+		index_ = cr.floor(index_);
+		if (index_ < 0 || index_ >= fs.params.length)
+			return false;
+		return cr.do_cmp(fs.params[index_], cmp_, value_);
+	};
+	pluginProto.cnds = new Cnds();
+	function Acts() {};
+	Acts.prototype.CallFunction = function (name_, params_)
+	{
+		var fs = pushFuncStack();
+		fs.name = name_.toLowerCase();
+		fs.retVal = 0;
+		cr.shallowAssignArray(fs.params, params_);
+		var ran = this.runtime.trigger(cr.plugins_.Function.prototype.cnds.OnFunction, this, fs.name);
+		if (isInPreview && !ran)
+		{
+;
+		}
+		popFuncStack();
+	};
+	Acts.prototype.SetReturnValue = function (value_)
+	{
+		var fs = getCurrentFuncStack();
+		if (fs)
+			fs.retVal = value_;
+		else
+;
+	};
+	Acts.prototype.CallExpression = function (unused)
+	{
+	};
+	pluginProto.acts = new Acts();
+	function Exps() {};
+	Exps.prototype.ReturnValue = function (ret)
+	{
+		var fs = getOneAboveFuncStack();
+		if (fs)
+			ret.set_any(fs.retVal);
+		else
+			ret.set_int(0);
+	};
+	Exps.prototype.ParamCount = function (ret)
+	{
+		var fs = getCurrentFuncStack();
+		if (fs)
+			ret.set_int(fs.params.length);
+		else
+		{
+;
+			ret.set_int(0);
+		}
+	};
+	Exps.prototype.Param = function (ret, index_)
+	{
+		index_ = cr.floor(index_);
+		var fs = getCurrentFuncStack();
+		if (fs)
+		{
+			if (index_ >= 0 && index_ < fs.params.length)
+			{
+				ret.set_any(fs.params[index_]);
+			}
+			else
+			{
+;
+				ret.set_int(0);
+			}
+		}
+		else
+		{
+;
+			ret.set_int(0);
+		}
+	};
+	Exps.prototype.Call = function (ret, name_)
+	{
+		var fs = pushFuncStack();
+		fs.name = name_.toLowerCase();
+		fs.retVal = 0;
+		cr.clearArray(fs.params);
+		var i, len;
+		for (i = 2, len = arguments.length; i < len; i++)
+			fs.params.push(arguments[i]);
+		var ran = this.runtime.trigger(cr.plugins_.Function.prototype.cnds.OnFunction, this, fs.name);
+		if (isInPreview && !ran)
+		{
+;
+		}
+		popFuncStack();
+		ret.set_any(fs.retVal);
+	};
+	pluginProto.exps = new Exps();
+}());
+;
+;
+cr.plugins_.Rex_TimeLine = function(runtime)
+{
+	this.runtime = runtime;
+};
+(function ()
+{
+    var TimerCacheKlass = function ()
+    {
+        this.lines = [];
+    };
+    var TimerCacheKlassProto = TimerCacheKlass.prototype;
+	TimerCacheKlassProto.alloc = function(timeline, on_timeout)
+	{
+        var timer;
+        if (this.lines.length > 0)
+        {
+            timer = this.lines.pop();
+			timer.Reset();
+        }
+        else
+        {
+            timer = timeline.CreateTimer(on_timeout);
+        }
+		return timer;
+	};
+	TimerCacheKlassProto.free = function(timer)
+	{
+        this.lines.push(timer);
+	};
+	cr.plugins_.Rex_TimeLine.timer_cache = new TimerCacheKlass();
+	var pluginProto = cr.plugins_.Rex_TimeLine.prototype;
+	pluginProto.Type = function(plugin)
+	{
+		this.plugin = plugin;
+		this.runtime = plugin.runtime;
+	};
+	var typeProto = pluginProto.Type.prototype;
+	typeProto.onCreate = function()
+	{
+	};
+	pluginProto.Instance = function(type)
+	{
+		this.type = type;
+		this.runtime = type.runtime;
+	};
+	var instanceProto = pluginProto.Instance.prototype;
+	var FNTYPE_UK = 0;          // unknow
+	var FNTYPE_NA = 1;	        // not avaiable
+	var FNTYPE_REXFNEX = 2;     // rex_functionext
+    var FNTYPE_REXFN2 = 3;      // rex_function2
+	var FNTYPE_OFFICIALFN = 4;  // official function
+	var FNTYPE_REXFN = 5;       // rex_function
+	instanceProto.onCreate = function()
+	{
+        this.update_manually       = (this.properties[0] == 0);
+        this.update_with_game_time = (this.properties[0] == 1);
+        this.update_with_real_time = (this.properties[0] == 2);
+        if (this.update_with_real_time)
+        {
+            var timer = new Date();
+            this.last_real_time = timer.getTime();
+        }
+        else
+        {
+            this.last_real_time = null;
+        }
+        this.my_timescale = -1.0;
+        this.timeline = new cr.plugins_.Rex_TimeLine.TimeLine();
+        if (this.update_with_game_time || this.update_with_real_time)
+            this.runtime.tickMe(this);
+        this.check_name = "TIMELINE";
+        if (!this.recycled)
+        {
+            this.timers = {};
+        }
+        this.timer_cache = cr.plugins_.Rex_TimeLine.timer_cache;
+		this.exp_triggered_timer_name = "";
+        this.timers_save = null;
+        this._fnobj = null;
+        this._fnobj_type = FNTYPE_UK;
+	    this._act_call_fn = null;
+		this._exp_call = null;
+	};
+	instanceProto.onDestroy = function()
+	{
+        this.timeline.CleanAll();
+        var name;
+        for (name in this.timers)
+            this.destroy_local_timer(name);
+	};
+    instanceProto.tick = function()
+    {
+        if (this.update_with_game_time)
+        {
+            var dt = this.runtime.getDt(this);
+            this.timeline.Dispatch(dt);
+        }
+        else if (this.update_with_real_time)
+        {
+            var timer = new Date();
+            var last_real_time = timer.getTime();
+            var dt = (last_real_time - this.last_real_time)/1000;
+            this.timeline.Dispatch(dt);
+            this.last_real_time = last_real_time;
+        }
+    };
+    instanceProto.CreateTimer = function(on_timeout)
+    {
+        var timer = new cr.plugins_.Rex_TimeLine.Timer(this.timeline);
+        timer.TimeoutHandlerSet(on_timeout);  // hang OnTimeout function
+        return timer;
+    };
+	instanceProto.LoadTimer = function (load_info, on_timeout)
+	{
+        var timer = this.CreateTimer(on_timeout);
+        timer.loadFromJSON(load_info);
+        timer.afterLoad();
+        return timer;
+	};
+	instanceProto.setup_callback = function (raise_assert_when_not_fnobj_avaiable, fn_type)
+	{
+        if (fn_type == null)
+        {
+            if (this.cache_RexFnExt())
+                return;
+            if (this.cache_RexFn2())
+                return;
+            if (this.cache_Fn())
+                return;
+            this._fnobj_type = FNTYPE_NA;  // function object is not avaiable
+            if (raise_assert_when_not_fnobj_avaiable)
+;
+        }
+        else
+        {
+		    this._fnobj_type = FNTYPE_UK;
+	        switch (fn_type)
+		    {
+		    case FNTYPE_REXFNEX:     // rex_functionext
+		        this.cache_RexFnExt();
+		    	break;
+            case FNTYPE_REXFN2:      // rex_function2
+		        this.cache_RexFn2();
+		    	break;
+	        case FNTYPE_OFFICIALFN:  // official function
+		        this.cache_Fn()
+		    	break;
+		    }
+        }
+	};
+	instanceProto.cache_RexFnExt = function()
+	{
+	    if (!cr.plugins_.Rex_FnExt)
+	        return false;
+        var plugins = this.runtime.types;
+        var name, inst;
+        for (name in plugins)
+        {
+            inst = plugins[name].instances[0];
+            if (inst instanceof cr.plugins_.Rex_FnExt.prototype.Instance)
+            {
+                this._fnobj = inst;
+                this._act_call_fn = cr.plugins_.Rex_FnExt.prototype.acts.CallFunction;
+		        this._exp_call = cr.plugins_.Rex_FnExt.prototype.exps.Call;
+			    this._fnobj_type = FNTYPE_REXFNEX;
+                return true;
+            }
+        }
+        return false;
+    };
+	instanceProto.cache_RexFn2 = function()
+	{
+	    if (!cr.plugins_.Rex_Function2)
+	        return false;
+        var plugins = this.runtime.types;
+        var name, inst;
+        for (name in plugins)
+        {
+            inst = plugins[name].instances[0];
+            if (inst instanceof cr.plugins_.Rex_Function2.prototype.Instance)
+            {
+                this._fnobj = inst;
+                this._act_call_fn = cr.plugins_.Rex_Function2.prototype.acts.CallFunction;
+		        this._exp_call = cr.plugins_.Rex_Function2.prototype.exps.Call;
+			    this._fnobj_type = FNTYPE_REXFN2;
+                return true;
+            }
+        }
+        return false;
+	};
+	instanceProto.cache_Fn = function()
+	{
+	    if (!cr.plugins_.Function)
+	        return false;
+        var plugins = this.runtime.types;
+        var name, inst;
+        for (name in plugins)
+        {
+            inst = plugins[name].instances[0];
+            if (inst instanceof cr.plugins_.Function.prototype.Instance)
+            {
+                this._fnobj = inst;
+                this._act_call_fn = cr.plugins_.Function.prototype.acts.CallFunction;
+                this._exp_call = cr.plugins_.Function.prototype.exps.Call;
+			    this._fnobj_type = FNTYPE_OFFICIALFN;
+                return true;
+            }
+        }
+        return false;
+	};
+    instanceProto.RunCallback = function(name, params, raise_assert_when_not_fnobj_avaiable)
+    {
+	    if (this._fnobj_type == FNTYPE_UK)
+	        this.setup_callback(raise_assert_when_not_fnobj_avaiable);
+	    switch (this._fnobj_type)
+		{
+		case FNTYPE_REXFNEX:     // rex_functionext
+		    this._fnobj.CallFunction(name, params);
+			break;
+        case FNTYPE_REXFN2:      // rex_function2
+	    case FNTYPE_OFFICIALFN:  // official function
+            this._act_call_fn.call(this._fnobj, name, params);
+			break;
+		}
+        return (this._fnobj_type != FNTYPE_NA);
+    };
+    instanceProto.Call = function(params, raise_assert_when_not_fnobj_avaiable)
+    {
+	    if (this._fnobj_type == FNTYPE_UK)
+	        this.setup_callback(raise_assert_when_not_fnobj_avaiable);
+	    switch (this._fnobj_type)
+		{
+		case FNTYPE_REXFNEX:     // rex_functionext
+        case FNTYPE_REXFN2:      // rex_function2
+		case FNTYPE_OFFICIALFN:  // official function
+		    this._exp_call.apply(this._fnobj, params);
+			break;
+		}
+        return (this._fnobj_type != FNTYPE_NA);
+    };
+    instanceProto.TimeGet = function()
+    {
+        return this.timeline.ABS_Time;
+    };
+	instanceProto.create_local_timer = function(timer_name)
+	{
+        var timer = this.timers[timer_name];
+        if (timer != null)  // timer exist
+        {
+            timer.Remove();
+        }
+        else      // get timer from timer cache
+        {
+            timer = this.timer_cache.alloc(this, on_timeout);
+            timer.plugin = this;
+            this.timers[timer_name] = timer;
+        }
+        return timer;
+	};
+	instanceProto.destroy_local_timer = function(timer_name)
+	{
+        var timer = this.timers[timer_name];
+        if (timer == null)
+            return;
+        timer.Remove();
+        delete this.timers[timer_name];
+        this.timer_cache.free(timer);
+	};
+	instanceProto.timer_cache_clean = function()
+	{
+        this.timer_cache.lines.length = 0;
+	};
+    var on_timeout = function ()
+    {
+        var plugin = this.plugin;
+        plugin.exp_triggered_timer_name = this._cb.name;
+        var name = this._cb.command;
+        var params = this._cb.params;
+        var has_fnobj = plugin.RunCallback(name, params, true);
+;
+        if (this._repeat_count === 0)
+            this.Start();
+        else if (this._repeat_count > 1)
+        {
+            this._repeat_count -= 1;
+            this.Start();
+        }
+    };
+    instanceProto._get_timer_cb_params = function(timer_name)
+    {
+        var params = {name:timer_name,
+                      command:""};
+        if (this._fnobj_type == FNTYPE_REXFN)
+		    params.params = {};
+		else
+		    params.params = [];
+        return params;
+    };   // fix me
+	instanceProto.saveToJSON = function ()
+	{
+        var name, timer, timers_save = {};
+        for (name in this.timers)
+        {
+            timer = this.timers[name];
+            timers_save[name] = {"tim": timer.saveToJSON(),
+                                "cmd": timer._cb.command,
+                                "pams": timer._cb.params,
+                                "rc": timer._repeat_count,
+                                };
+        }
+		return { "ts": this.my_timescale,
+                 "ug": this.update_with_game_time,
+                 "tl": this.timeline.saveToJSON(),
+                 "timers": timers_save,
+                 "lrt": this.last_real_time,
+                 "fnType": this._fnobj_type,
+                 };
+	};
+	instanceProto.loadFromJSON = function (o)
+	{
+        this.my_timescale = o["ts"];
+        this.timeline.loadFromJSON(o["tl"]);
+        this.timers_save = o["timers"];
+        this.last_real_time = o["lrt"];
+        this._fnobj_type = o["fnType"];
+        this.onDestroy();
+        this.timer_cache_clean();
+	};
+	instanceProto.afterLoad = function ()
+	{
+        var name, timer_info, timer;
+        for (name in this.timers_save)
+        {
+            timer_info = this.timers_save[name];
+            timer = this.LoadTimer(timer_info["tim"], on_timeout);
+            timer.plugin = this;
+            timer._cb = this._get_timer_cb_params(name);
+            timer._cb.command = timer_info["cmd"];
+            timer._cb.params = timer_info["pams"];
+            timer._repeat_count = timer_info["rc"];
+        }
+        this.timers_save = null;
+        this.setup_callback(false, this._fnobj_type);
+	};
+	function Cnds() {};
+	pluginProto.cnds = new Cnds();
+	Cnds.prototype.IsRunning = function (timer_name)
+	{
+        var timer = this.timers[timer_name];
+		return (timer)? timer.IsActive(): false;
+	};
+	function Acts() {};
+	pluginProto.acts = new Acts();
+    Acts.prototype.PushTimeLine = function (delta_time)
+	{
+        if (!this.update_manually)
+            return;
+        this.timeline.Dispatch(delta_time);
+	};
+    Acts.prototype.Setup_deprecated = function () { };
+    Acts.prototype.CreateTimer_deprecated = function () { };
+    Acts.prototype.StartTimer = function (timer_name, delay_time, repeat_count)
+	{
+        var timer = this.timers[timer_name];
+        if (timer)
+        {
+            timer._repeat_count = repeat_count;
+            timer.Start(delay_time);
+        }
+	};
+    Acts.prototype.StartTrgTimer = function (delay_time)
+	{
+	    var timer_name = this.exp_triggered_timer_name;
+		var timer = this.timers[timer_name];
+        if (timer)
+            timer.Start(delay_time);
+	};
+    Acts.prototype.PauseTimer = function (timer_name)
+	{
+        var timer = this.timers[timer_name];
+        if (timer)
+            timer.Suspend();
+	};
+    Acts.prototype.ResumeTimer = function (timer_name)
+	{
+        var timer = this.timers[timer_name];
+        if (timer)
+            timer.Resume();
+	};
+    Acts.prototype.StopTimer = function (timer_name)
+	{
+        var timer = this.timers[timer_name];
+        if (timer)
+            timer.Remove();
+	};
+    Acts.prototype.CleanTimeLine = function ()
+	{
+        this.timeline.CleanAll();
+	};
+    Acts.prototype.DeleteTimer = function (timer_name)
+	{
+	    this.destroy_local_timer(timer_name);
+	};
+    Acts.prototype.SetTimerParameter = function (timer_name, index, value)
+	{
+	    var timer = this.timers[timer_name];
+	    if (timer)
+	    {
+	        timer._cb.params[index] = value;
+	    }
+	};
+    Acts.prototype.PauseTimeLine = function ()
+	{
+	    this.update_with_game_time = false;
+	};
+    Acts.prototype.ResumeTimeLine = function ()
+	{
+	    this.update_with_game_time = true;
+	};
+    Acts.prototype.CreateTimer = function (timer_name, callback_name, callback_params)
+	{
+        var timer = this.create_local_timer(timer_name);
+        timer._cb = this._get_timer_cb_params(timer_name);
+        timer._cb.command = callback_name;
+        cr.shallowAssignArray(timer._cb.params, callback_params);
+	};
+    Acts.prototype.SetTimerParameters = function (timer_name, callback_params)
+	{
+	    var timer = this.timers[timer_name];
+		if (timer)
+		{
+		    cr.shallowAssignArray(timer._cb.params, callback_params);
+		}
+	};
+    Acts.prototype.SetTrgTimerParameters = function (callback_params)
+	{
+	    var timer_name = this.exp_triggered_timer_name;
+	    var timer = this.timers[timer_name];
+		if (timer)
+		{
+		    cr.shallowAssignArray(timer._cb.params, callback_params);
+		}
+	};
+    Acts.prototype.DeleteTrgTimer = function ()
+	{
+	    this.destroy_local_timer(this.exp_triggered_timer_name);
+	};
+    Acts.prototype.PushTimeLineTo = function (t)
+	{
+        if (!this.update_manually)
+            return;
+        var delta_time = t - this.timeline.ABS_Time;
+        if (delta_time < 0)
+            return;
+        this.timeline.Dispatch(delta_time);
+	};
+    Acts.prototype.SetupCallback = function (callback_type)
+	{
+        var plugins = this.runtime.types;
+        var name, inst;
+        if (callback_type === 0)
+        {
+            if(!cr.plugins_.Function)
+                return;
+            for (name in plugins)
+            {
+                inst = plugins[name].instances[0];
+                if (inst instanceof cr.plugins_.Function.prototype.Instance)
+                {
+                    this._fnobj = inst;
+                    this._act_call_fn = cr.plugins_.Function.prototype.acts.CallFunction;
+                    this._exp_call = cr.plugins_.Function.prototype.exps.Call;
+				    this._fnobj_type = FNTYPE_OFFICIALFN;
+                    return;
+                }
+            }
+        }
+        else if (callback_type === 1)
+        {
+            if (!cr.plugins_.Rex_Function2)
+                return;
+            for (name in plugins)
+            {
+                inst = plugins[name].instances[0];
+                if (inst instanceof cr.plugins_.Rex_Function2.prototype.Instance)
+                {
+                    this._fnobj = inst;
+                    this._act_call_fn = cr.plugins_.Rex_Function2.prototype.acts.CallFunction;
+			        this._exp_call = cr.plugins_.Rex_Function2.prototype.exps.Call;
+				    this._fnobj_type = FNTYPE_REXFN2;
+                    return;
+                }
+            }
+        }
+	};
+	function Exps() {};
+	pluginProto.exps = new Exps();
+	Exps.prototype.TimerRemainder = function (ret, timer_name)
+	{
+        var timer = this.timers[timer_name];
+        var t = (timer)? timer.RemainderTimeGet():0;
+	    ret.set_float(t);
+	};
+	Exps.prototype.TimerElapsed = function (ret, timer_name)
+	{
+        var timer = this.timers[timer_name];
+        var t = (timer)? timer.ElapsedTimeGet():0;
+	    ret.set_float(t);
+	};
+	Exps.prototype.TimerRemainderPercent = function (ret, timer_name)
+	{
+        var timer = this.timers[timer_name];
+        var t = (timer)? timer.RemainderTimePercentGet():0;
+	    ret.set_float(t);
+	};
+	Exps.prototype.TimerElapsedPercent = function (ret, timer_name)
+	{
+        var timer = this.timers[timer_name];
+        var t = (timer)? timer.ElapsedTimePercentGet():0;
+	    ret.set_float(t);
+	};
+	Exps.prototype.TimeLineTime = function (ret)
+	{
+	    ret.set_float(this.timeline.ABS_Time);
+	};
+	Exps.prototype.TriggeredTimerName = function (ret)
+	{
+	    ret.set_string(this.exp_triggered_timer_name);
+	};
+	Exps.prototype.TimerDelayTime = function (ret)
+	{
+        var timer = this.timers[timer_name];
+        var t = (timer)? timer.DelayTimeGet():0;
+	    ret.set_float(t);
+	};
+}());
+(function ()
+{
+    cr.plugins_.Rex_TimeLine.TimeLine = function()
+    {
+        this.CleanAll();
+    };
+    var TimeLineProto = cr.plugins_.Rex_TimeLine.TimeLine.prototype;
+    var _TIMERQUEUE_SORT = function(timerA, timerB)
+    {
+        var ta = timerA.abs_time;
+        var tb = timerB.abs_time;
+        return (ta < tb) ? -1 : (ta > tb) ? 1 : 0;
+    }
+    TimeLineProto.CleanAll = function()
+	{
+        this.triggered_timer = null;
+        this.ABS_Time = 0;
+        this._timer_abs_time = 0;
+        this._waiting_timer_queue = [];
+        this._process_timer_queue = [];
+        this._suspend_timer_queue = [];
+        this.activate_queue = [this._waiting_timer_queue, this._process_timer_queue];
+        this.all_queues = [this._waiting_timer_queue, this._process_timer_queue, this._suspend_timer_queue];
+	};
+	TimeLineProto.CurrentTimeGet = function()
+	{
+        return this._timer_abs_time;
+	};
+	TimeLineProto.RegistTimer = function(timer)
+	{
+        this._add_timer_to_activate_lists(timer);
+	};
+    TimeLineProto.RemoveTimer = function(timer)
+    {
+        this._remove_timer_from_lists(timer, false);  //activate_only=False
+        timer._idle();
+    };
+    TimeLineProto.Dispatch = function(delta_time)
+    {
+        this.ABS_Time += delta_time;
+        this._waiting_timer_queue.sort(_TIMERQUEUE_SORT);
+        var quene_length = this._waiting_timer_queue.length;
+        var i, timer;
+        var _timer_cnt = 0;
+        for (i=0; i<quene_length; i++)
+        {
+            timer = this._waiting_timer_queue[i];
+            if (this._is_timer_time_out(timer))
+            {
+                this._process_timer_queue.push(timer);
+                _timer_cnt += 1;
+            }
+        }
+        if (_timer_cnt)
+        {
+            for(i=_timer_cnt; i<quene_length; i++)
+            {
+                this._waiting_timer_queue[i-_timer_cnt] = this._waiting_timer_queue[i];
+            }
+            this._waiting_timer_queue.length -= _timer_cnt;
+        }
+        while (this._process_timer_queue.length > 0)
+        {
+            this._process_timer_queue.sort(_TIMERQUEUE_SORT);
+            this.triggered_timer = this._process_timer_queue.shift();
+            this._timer_abs_time = this.triggered_timer.abs_time;
+            this.triggered_timer.DoHandle();
+        }
+        this._timer_abs_time = this.ABS_Time;
+    };
+    TimeLineProto.SuspendTimer = function(timer)
+    {
+        var is_success = this._remove_timer_from_lists(timer, true); //activate_only=True
+        if (is_success)
+        {
+            this._suspend_timer_queue.push(timer);
+            timer.__suspend__();
+        }
+        return is_success;
+    };
+    TimeLineProto.ResumeTimer = function(timer)
+    {
+        var is_success = false;
+        var item_index = this._suspend_timer_queue.indexOf(timer);
+        if (item_index != (-1))
+        {
+            cr.arrayRemove(this._suspend_timer_queue, item_index);
+            timer.__resume__();
+            this.RegistTimer(timer);
+            is_success = true;
+        }
+        return is_success;
+    };
+    TimeLineProto.SetTimescale = function(timer, timescale)
+    {
+        timer._set_timescale(timescale);
+        var is_success = this._remove_timer_from_lists(timer, true);  //activate_only=True
+        if (is_success)
+        {
+            this.RegistTimer(timer);
+        }
+        return is_success;
+    };
+    TimeLineProto.ChangeTimerRate = function(timer, rate)
+    {
+        timer._change_rate(rate);
+        var is_success = this._remove_timer_from_lists(timer, true);  //activate_only=True
+        if (is_success)
+        {
+            this.RegistTimer(timer);
+        }
+        return is_success;
+    };
+	TimeLineProto.saveToJSON = function ()
+	{
+		return { "at": this.ABS_Time };
+	};
+	TimeLineProto.loadFromJSON = function (o)
+	{
+		this.ABS_Time = o["at"];
+	};
+    TimeLineProto._is_timer_time_out = function(timer)
+    {
+        return (timer.abs_time <= this.ABS_Time);
+    };
+    TimeLineProto._add_timer_to_activate_lists = function(timer)
+    {
+        var queue = ( this._is_timer_time_out(timer) )?
+                    this._process_timer_queue : this._waiting_timer_queue;
+        queue.push(timer);
+    };
+    TimeLineProto._remove_timer_from_lists = function(timer, activate_only)
+    {
+        var is_success = false;
+        var timer_lists = (activate_only)? this.activate_queue : this.all_queues;
+        var i;
+        var lists_length = timer_lists.length;
+        var timer_queue, item_index;
+        for(i=0; i<lists_length; i++)
+        {
+            timer_queue = timer_lists[i];
+            item_index = timer_queue.indexOf(timer);
+            if (item_index!= (-1))
+            {
+                cr.arrayRemove(timer_queue, item_index);
+                is_success = true;
+                break;
+            }
+        }
+        return is_success;
+    };
+    cr.plugins_.Rex_TimeLine.Timer = function(timeline)
+    {
+        this.timeline = timeline;
+		this.Reset();
+        this.extra = {};
+    };
+    var TimerProto = cr.plugins_.Rex_TimeLine.Timer.prototype;
+    TimerProto.Reset = function()
+    {
+        this.delay_time = 0; //delay_time
+        this._remainder_time = 0;
+        this.abs_time = 0;
+        this.timescale = 1;
+        this._idle();
+        this._abs_timeout_set(0); // delay_time
+    };
+    TimerProto.Restart = function(delay_time)
+    {
+        if (delay_time != null)  // assign new delay time
+        {
+            this.delay_time = delay_time;
+        }
+        var t = this.delay_time * this.timescale;
+        this._abs_timeout_set(t);
+        if (this._is_alive)
+        {
+            if (!this._is_active)
+            {
+                this._remainder_time = this.abs_time;
+                this.Resume(); // update timer in TimeLineMgr
+            }
+        }
+        else
+        {
+            this.timeline.RegistTimer(this);
+            this._run();
+        }
+    };
+    TimerProto.Start = TimerProto.Restart;
+    TimerProto.Suspend = function()
+    {
+        this.timeline.SuspendTimer(this);
+    };
+    TimerProto.Resume = function()
+    {
+        this.timeline.ResumeTimer(this);
+    };
+    TimerProto.SetTimescale = function(timescale)
+    {
+        if (timescale == this.timescale)
+            return;
+        this.timeline.SetTimescale(this, timescale);
+    };
+    TimerProto.ChangeRate = function(rate)
+    {
+        this.timeline.ChangeTimerRate(this, rate);
+    };
+    TimerProto.Remove = function()
+    {
+        if (this._is_alive)
+            this.timeline.RemoveTimer(this);
+    };
+    TimerProto.IsAlive = function()
+    {
+        return this._is_alive;
+    };
+    TimerProto.IsActive = function()
+    {
+        return (this._is_alive && this._is_active);
+    };
+    TimerProto.RemainderTimeGet = function()
+    {
+        var remainder_time = 0;
+        if (this.IsActive())       // -> run
+        {
+            remainder_time = this.abs_time - this.timeline.CurrentTimeGet();
+        }
+        else if (this.IsAlive())   // (!this.IsActive() && this.IsAlive()) -> suspend
+        {
+            remainder_time = this._remainder_time;
+        }
+        return remainder_time;
+    };
+    TimerProto.RemainderTimeSet = function(_t)
+    {
+        if (!this.IsAlive())
+            return;
+        var remainder_time = cr.clamp(_t, 0, this.delay_time);
+        this._remainder_time = remainder_time;
+        this.abs_time = this.timeline.CurrentTimeGet() + remainder_time;
+    };
+    TimerProto.ElapsedTimeGet = function()
+    {
+        return (this.delay_time - this.RemainderTimeGet());
+    };
+    TimerProto.RemainderTimePercentGet = function()
+    {
+        return (this.delay_time == 0)? 0:
+               (this.RemainderTimeGet() / this.delay_time);
+    };
+    TimerProto.ElapsedTimePercentGet = function()
+    {
+        return (this.delay_time == 0)? 0:
+               (this.ElapsedTimeGet() / this.delay_time);
+    };
+    TimerProto.ExpiredTimeGet = function()
+    {
+        return (this.timeline.ABS_Time - this.abs_time);
+    };
+    TimerProto.DelayTimeGet = function()
+    {
+        return this.delay_time;
+    };
+    TimerProto.TimeoutHandlerSet = function(handler)
+    {
+        this.OnTimeout = handler;
+    };
+    TimerProto.DoHandle = function()
+    {
+        this._idle();
+        if (this.OnTimeout)
+            this.OnTimeout();
+    };
+	TimerProto.saveToJSON = function ()
+	{
+	    var remainder_time = this.RemainderTimeGet();
+		return { "dt": this.delay_time,
+                 "rt": remainder_time,
+                 "ts": this.timescale,
+                 "alive": this._is_alive,
+                 "active": this._is_active,
+                 "ex": this.extra
+                 };
+	};
+	TimerProto.loadFromJSON = function (o)
+	{
+        this.delay_time = o["dt"];
+        this._is_alive = o["alive"];
+        this._is_active = o["active"];
+        this.timescale = o.hasOwnProperty("ts")? o["ts"]:1;    // compaticable
+        this.extra = o["ex"];
+        this.RemainderTimeSet(o["rt"]);  // set remaind_time and abs_time
+	};
+	TimerProto.afterLoad = function ()
+	{
+        if (this.IsAlive())
+        {
+            this.timeline.RegistTimer(this);
+            if (!this.IsActive())
+            {
+                this.timeline.SuspendTimer(this);
+            }
+        }
+	};
+    TimerProto._idle = function()
+    {
+        this._is_alive = false;   // start, stop
+        this._is_active = false;  // suspend, resume
+    };
+    TimerProto._run = function()
+    {
+        this._is_alive = true;
+        this._is_active = true;
+    };
+    TimerProto._abs_timeout_set = function(delta_time)
+    {
+        this.abs_time = this.timeline.CurrentTimeGet() + delta_time;
+    };
+    TimerProto.__suspend__ = function()
+    {
+        this._remainder_time = this.abs_time - this.timeline.CurrentTimeGet();
+        this._is_active = false;
+    };
+    TimerProto.__resume__ = function()
+    {
+        this._abs_timeout_set(this._remainder_time);
+        this._is_active = true;
+    };
+    TimerProto._set_timescale = function(timescale)
+    {
+        if (timescale < 0)   // invalid
+            return;
+        var do_change_rate = false;
+        if ((timescale == 0) && this._is_active) // suspend
+        {
+            this.Suspend();
+        }
+        else if ((timescale > 0) && (!this._is_active)) // resume
+        {
+            this.Resume();
+            do_change_rate = true;
+        }
+        else if ((timescale > 0) && this._is_active) // this._is_active, normal
+        {
+            do_change_rate = true;
+        }
+        if (do_change_rate)
+        {
+            var rate = timescale/this.timescale;
+            this._change_rate(rate);
+            this.timescale = timescale;
+        }
+    };
+    TimerProto._change_rate = function(rate)
+    {
+        if (this._is_active)
+        {
+            var abs_time = this.timeline.CurrentTimeGet();
+            var remainder_time = this.abs_time - abs_time;
+            this.abs_time = abs_time + (remainder_time*rate);
+        }
+        else
+        {
+            this._remainder_time *= rate;
+        }
+    };
+}());
+;
+;
 cr.plugins_.Sprite = function(runtime)
 {
 	this.runtime = runtime;
@@ -21007,6 +23140,204 @@ cr.plugins_.Text = function(runtime)
 }());
 ;
 ;
+cr.plugins_.TiledBg = function(runtime)
+{
+	this.runtime = runtime;
+};
+(function ()
+{
+	var pluginProto = cr.plugins_.TiledBg.prototype;
+	pluginProto.Type = function(plugin)
+	{
+		this.plugin = plugin;
+		this.runtime = plugin.runtime;
+	};
+	var typeProto = pluginProto.Type.prototype;
+	typeProto.onCreate = function()
+	{
+		if (this.is_family)
+			return;
+		this.texture_img = new Image();
+		this.texture_img.cr_filesize = this.texture_filesize;
+		this.runtime.waitForImageLoad(this.texture_img, this.texture_file);
+		this.pattern = null;
+		this.webGL_texture = null;
+	};
+	typeProto.onLostWebGLContext = function ()
+	{
+		if (this.is_family)
+			return;
+		this.webGL_texture = null;
+	};
+	typeProto.onRestoreWebGLContext = function ()
+	{
+		if (this.is_family || !this.instances.length)
+			return;
+		if (!this.webGL_texture)
+		{
+			this.webGL_texture = this.runtime.glwrap.loadTexture(this.texture_img, true, this.runtime.linearSampling, this.texture_pixelformat);
+		}
+		var i, len;
+		for (i = 0, len = this.instances.length; i < len; i++)
+			this.instances[i].webGL_texture = this.webGL_texture;
+	};
+	typeProto.loadTextures = function ()
+	{
+		if (this.is_family || this.webGL_texture || !this.runtime.glwrap)
+			return;
+		this.webGL_texture = this.runtime.glwrap.loadTexture(this.texture_img, true, this.runtime.linearSampling, this.texture_pixelformat);
+	};
+	typeProto.unloadTextures = function ()
+	{
+		if (this.is_family || this.instances.length || !this.webGL_texture)
+			return;
+		this.runtime.glwrap.deleteTexture(this.webGL_texture);
+		this.webGL_texture = null;
+	};
+	typeProto.preloadCanvas2D = function (ctx)
+	{
+		ctx.drawImage(this.texture_img, 0, 0);
+	};
+	pluginProto.Instance = function(type)
+	{
+		this.type = type;
+		this.runtime = type.runtime;
+	};
+	var instanceProto = pluginProto.Instance.prototype;
+	instanceProto.onCreate = function()
+	{
+		this.visible = (this.properties[0] === 0);							// 0=visible, 1=invisible
+		this.rcTex = new cr.rect(0, 0, 0, 0);
+		this.has_own_texture = false;										// true if a texture loaded in from URL
+		this.texture_img = this.type.texture_img;
+		if (this.runtime.glwrap)
+		{
+			this.type.loadTextures();
+			this.webGL_texture = this.type.webGL_texture;
+		}
+		else
+		{
+			if (!this.type.pattern)
+				this.type.pattern = this.runtime.ctx.createPattern(this.type.texture_img, "repeat");
+			this.pattern = this.type.pattern;
+		}
+	};
+	instanceProto.afterLoad = function ()
+	{
+		this.has_own_texture = false;
+		this.texture_img = this.type.texture_img;
+	};
+	instanceProto.onDestroy = function ()
+	{
+		if (this.runtime.glwrap && this.has_own_texture && this.webGL_texture)
+		{
+			this.runtime.glwrap.deleteTexture(this.webGL_texture);
+			this.webGL_texture = null;
+		}
+	};
+	instanceProto.draw = function(ctx)
+	{
+		ctx.globalAlpha = this.opacity;
+		ctx.save();
+		ctx.fillStyle = this.pattern;
+		var myx = this.x;
+		var myy = this.y;
+		if (this.runtime.pixel_rounding)
+		{
+			myx = Math.round(myx);
+			myy = Math.round(myy);
+		}
+		var drawX = -(this.hotspotX * this.width);
+		var drawY = -(this.hotspotY * this.height);
+		var offX = drawX % this.texture_img.width;
+		var offY = drawY % this.texture_img.height;
+		if (offX < 0)
+			offX += this.texture_img.width;
+		if (offY < 0)
+			offY += this.texture_img.height;
+		ctx.translate(myx, myy);
+		ctx.rotate(this.angle);
+		ctx.translate(offX, offY);
+		ctx.fillRect(drawX - offX,
+					 drawY - offY,
+					 this.width,
+					 this.height);
+		ctx.restore();
+	};
+	instanceProto.drawGL_earlyZPass = function(glw)
+	{
+		this.drawGL(glw);
+	};
+	instanceProto.drawGL = function(glw)
+	{
+		glw.setTexture(this.webGL_texture);
+		glw.setOpacity(this.opacity);
+		var rcTex = this.rcTex;
+		rcTex.right = this.width / this.texture_img.width;
+		rcTex.bottom = this.height / this.texture_img.height;
+		var q = this.bquad;
+		if (this.runtime.pixel_rounding)
+		{
+			var ox = Math.round(this.x) - this.x;
+			var oy = Math.round(this.y) - this.y;
+			glw.quadTex(q.tlx + ox, q.tly + oy, q.trx + ox, q.try_ + oy, q.brx + ox, q.bry + oy, q.blx + ox, q.bly + oy, rcTex);
+		}
+		else
+			glw.quadTex(q.tlx, q.tly, q.trx, q.try_, q.brx, q.bry, q.blx, q.bly, rcTex);
+	};
+	function Cnds() {};
+	Cnds.prototype.OnURLLoaded = function ()
+	{
+		return true;
+	};
+	pluginProto.cnds = new Cnds();
+	function Acts() {};
+	Acts.prototype.SetEffect = function (effect)
+	{
+		this.blend_mode = effect;
+		this.compositeOp = cr.effectToCompositeOp(effect);
+		cr.setGLBlend(this, effect, this.runtime.gl);
+		this.runtime.redraw = true;
+	};
+	Acts.prototype.LoadURL = function (url_, crossOrigin_)
+	{
+		var img = new Image();
+		var self = this;
+		img.onload = function ()
+		{
+			self.texture_img = img;
+			if (self.runtime.glwrap)
+			{
+				if (self.has_own_texture && self.webGL_texture)
+					self.runtime.glwrap.deleteTexture(self.webGL_texture);
+				self.webGL_texture = self.runtime.glwrap.loadTexture(img, true, self.runtime.linearSampling);
+			}
+			else
+			{
+				self.pattern = self.runtime.ctx.createPattern(img, "repeat");
+			}
+			self.has_own_texture = true;
+			self.runtime.redraw = true;
+			self.runtime.trigger(cr.plugins_.TiledBg.prototype.cnds.OnURLLoaded, self);
+		};
+		if (url_.substr(0, 5) !== "data:" && crossOrigin_ === 0)
+			img.crossOrigin = "anonymous";
+		this.runtime.setImageSrc(img, url_);
+	};
+	pluginProto.acts = new Acts();
+	function Exps() {};
+	Exps.prototype.ImageWidth = function (ret)
+	{
+		ret.set_float(this.texture_img.width);
+	};
+	Exps.prototype.ImageHeight = function (ret)
+	{
+		ret.set_float(this.texture_img.height);
+	};
+	pluginProto.exps = new Exps();
+}());
+;
+;
 cr.plugins_.Touch = function(runtime)
 {
 	this.runtime = runtime;
@@ -22232,1800 +24563,1646 @@ cr.plugins_.Touch = function(runtime)
 }());
 ;
 ;
-cr.plugins_.drawsprite = function(runtime)
-{
-	this.runtime = runtime;
+cr.plugins_.rex_TagText = function (runtime) {
+    this.runtime = runtime;
 };
-(function ()
-{
-	var pluginProto = cr.plugins_.drawsprite.prototype;
-	pluginProto.Type = function(plugin)
-	{
-		this.plugin = plugin;
-		this.runtime = plugin.runtime;
-	};
-	var typeProto = pluginProto.Type.prototype;
-	typeProto.onCreate = function()
-	{
-	};
-	pluginProto.Instance = function(type)
-	{
-		this.type = type;
-		this.runtime = type.runtime;
-	};
-	var instanceProto = pluginProto.Instance.prototype;
-	instanceProto.onCreate = function()
-	{
-                this.parsestring = "";
-	};
-	instanceProto.draw = function(ctx)
-	{
-	};
-	instanceProto.drawGL = function (glw)
-	{
-	};
-	pluginProto.cnds = {};
-	var cnds = pluginProto.cnds;
-	pluginProto.acts = {};
-	var acts = pluginProto.acts;
-        acts.draw_sprite_maze = function (obj, layer, gridx, gridy , myrow, mycol, xpos, ypos, owidth, oheight, pestring)
-	{
-                var GRIDx = gridx;
-                var GRIDy = gridy;
-                var ROWS = myrow;
-                var COLS = mycol;
-                var Maze;
-                var Stack;
-                var mywidth = obj.instances[0].width;
-                var myheight = obj.instances[0].height;
-                var i, j, r, c, d, k, dir1;
-                var a = 0;
-                var startx = Math.floor(mywidth*obj.instances[0].hotspotX)+xpos;
-                var starty = Math.floor(myheight*obj.instances[0].hotspotY)+ypos;
-                var stackpos = 0;
-                var curx = 0;
-                var cury = 0;
-                var visited = 1;
-                var direction = 0;
-                var move = [[ 0, 1], [ 0, -1], [ 1, 0], [ -1, 0]];
-                var next = [[ 0, 0], [ 0, 0], [ 0, 0], [ 0, 0]];
-                var mystring = pestring;
-                var temp = mystring.split(",");
-                if ( owidth > 0 )
-                {
-                    mywidth = owidth;
-                }
-                if ( oheight > 0 )
-                {
-                    myheight = oheight;
-                }
-                Maze = new Array(ROWS);
-                for (i = 0; i < ROWS; i++)
-	            Maze[i] = new Array(COLS);
-                for (i = 0; i < ROWS; i++)
-                    for (j = 0; j < COLS; j++)
-                        Maze[i][j] = parseInt("15");
-                Stack = new Array(ROWS*COLS);
-                for (i = 0; i < ROWS*COLS; i++)
-                    Stack[i] = new Array(2);
-                for (i = 0; i < ROWS*COLS; i++)
-                    for (j = 0; j < 2; j++)
-                        Stack[i][j] = parseInt("0");
-                curx = Math.floor((Math.random()*(43541)))%ROWS;
-                cury = Math.floor((Math.random()*(43481
-)))%COLS;
-                while ( visited < (ROWS*COLS) )
-                {
-                    j = 0;
-                    for (i = 0; i < 4; i++)
-                    {
-                        r = curx + move[i][0];
-                        c = cury + move[i][1];
-                        if ( r >= 0 && c >= 0 && r < ROWS && c < COLS )
-                        {
-                            if ( Maze[r][c] == 15 )
-                            {
-                                next[j][0] = move[i][0];
-                                next[j][1] = move[i][1];
-                                j++;
-                            }
-                        }
-                    }
-                    if ( j > 0 )
-                    {
-                        stackpos++;
-                        Stack[stackpos][0] = curx;
-                        Stack[stackpos][1] = cury;
-                        i = Math.floor((Math.random()*(7919)))%j;
-                        if ( next[i][0] == -1 )
-                        {
-                            Maze[curx][cury] -= 8;
-                            curx--;
-                            Maze[curx][cury] -= 2;
-                        }
-                        if ( next[i][0] == 1 )
-                        {
-                            Maze[curx][cury] -= 2;
-                            curx++;
-                            Maze[curx][cury] -= 8;
-                        }
-                        if ( next[i][1] == -1 )
-                        {
-                            Maze[curx][cury] -= 1;
-                            cury--;
-                            Maze[curx][cury] -= 4;
-                        }
-                        if ( next[i][1] == 1 )
-                        {
-                            Maze[curx][cury] -= 4;
-                            cury++;
-                            Maze[curx][cury] -= 1;
-                        }
-                        visited++;
-                    }
-                    else
-                    {
-                        curx = Stack[stackpos][0];
-                        cury = Stack[stackpos][1];
-                        stackpos--;
-                    }
-                }
-                while ( a < temp.length )
-                {
-                    if ( temp[a] < ROWS && temp[a+1] < COLS )
-                    {
-                        Maze[parseInt(temp[a])][parseInt(temp[a+1])] -= parseInt(temp[a+2]);
-                    }
-                    a = a + 3;
-                }
-                for (i = 0; i < ROWS; i++)
-                    for (j = 0; j < COLS; j++)
-                    {
-                        dir1 = 0;
-                        if ( (Maze[i][j] & parseInt("1")) == 1 )
-                        {
-                            dir1 = 1;
-                            for (k = 0; k < GRIDx; k++)
-                            {
-                                this.runtime.createInstance(obj, layer, startx+(i*mywidth*GRIDx)+(mywidth*k), starty+(j*myheight*GRIDy));
-                            }
-                        }
-                        if ( (Maze[i][j] & parseInt("8")) == 8 )
-                        {
-                            if ( j < (COLS-1) )
-                            {
-                                if ( (Maze[i][j+1] & parseInt("1")) != 1 && (Maze[i][j+1] & parseInt("8")) != 8 )
-                                {
-                                    this.runtime.createInstance(obj, layer, startx+(i*mywidth*GRIDx), starty+(j*myheight*GRIDy)+(myheight*GRIDy));
-                                }
-                            }
-                            for (k = 0; k < GRIDy; k++)
-                            {
-                                if ( dir1 == 0 )
-                                {
-                                    this.runtime.createInstance(obj, layer, startx+(i*mywidth*GRIDx), starty+(j*myheight*GRIDy)+(myheight*k));
-                                }
-                                if ( k == 0 )
-                                {
-                                    dir1 = 0;
-                                }
-                            }
-                        }
-                        if ( (Maze[i][j] & parseInt("4")) == 4 && j == (COLS-1) )
-                        {
-                            for (k = 0; k < GRIDx; k++)
-                            {
-                                this.runtime.createInstance(obj, layer, startx+(i*mywidth*GRIDx)+(mywidth*k), starty+(j*myheight*GRIDy)+(myheight*(GRIDy)));
-                            }
-                        }
-                        if ( (Maze[i][j] & parseInt("2")) == 2 && i == (ROWS-1) )
-                        {
-                            for (k = 0; k < GRIDy; k++)
-                            {
-                                this.runtime.createInstance(obj, layer, startx+(i*mywidth*GRIDx)+(mywidth*(GRIDx)), starty+(j*myheight*GRIDy)+(myheight*k));
-                            }
-                            if ( j == (COLS-1) )
-                            {
-                                this.runtime.createInstance(obj, layer, startx+(i*mywidth*GRIDx)+(mywidth*(GRIDx)), starty+(j*myheight*GRIDy)+(myheight*k));
-                            }
-                        }
-                    }
-	};
-        acts.draw_sprite_path = function (obj, layer, ostring, owidth, oheight)
-	{
-                var myx = 0;
-                var myy = 0;
-                var myx2 = 0;
-                var myy2 = 0;
-                var myloop = -1;
-                var a = 2;
-                var temp = new Array();
-                var mystring = ostring;
-                temp = mystring.split(",");
-                var mywidth = obj.instances[0].width;
-                var myheight = obj.instances[0].height;
-                if ( owidth > 0 )
-                {
-                    mywidth = owidth;
-                }
-                if ( oheight > 0 )
-                {
-                    myheight = oheight;
-                }
-                myx = parseInt(temp[0]);
-                myy = parseInt(temp[1]);
-		while ( a < temp.length )
-                {
-                    if ( temp[a].toLowerCase()  == "r" )
-                    {
-                        while ( myloop < parseInt(temp[a+1]) )
-                        {
-                            this.runtime.createInstance(obj, layer,myx+((myloop+1)*mywidth),myy);
-                            myx2 = myx+((myloop+1)*mywidth);
-                            myy2 = myy;
-                            ++myloop;
-                        }
-                    }
-                    if ( temp[a].toLowerCase() == "l" )
-                    {
-                        while ( myloop < parseInt(temp[a+1]) )
-                        {
-                            this.runtime.createInstance(obj, layer,myx-((myloop+1)*mywidth),myy);
-                            myx2 = myx-((myloop+1)*mywidth);
-                            myy2 = myy;
-                            ++myloop;
-                        }
-                    }
-                    if ( temp[a].toLowerCase() == "u" )
-                    {
-                        while ( myloop < parseInt(temp[a+1]) )
-                        {
-                            this.runtime.createInstance(obj, layer,myx,myy-((myloop+1)*myheight));
-                            myx2 = myx;
-                            myy2 = myy-((myloop+1)*myheight)
-                            ++myloop;
-                        }
-                    }
-                    if ( temp[a].toLowerCase() == "d" )
-                    {
-                        while ( myloop < parseInt(temp[a+1]) )
-                        {
-                            this.runtime.createInstance(obj, layer,myx,myy+((myloop+1)*myheight));
-                            myx2 = myx;
-                            myy2 = myy+((myloop+1)*myheight);
-                            ++myloop;
-                        }
-                    }
-                    myx = myx2;
-                    myy = myy2;
-                    a = a + 2;
-                    myloop = 0;
-                }
-	};
-        acts.draw_sprite = function (obj, layer, ostring, owidth, oheight)
-	{
-                var myloop = 0;
-                var a = 0;
-                var temp = new Array();
-                var mystring = ostring.toString();
-                temp = mystring.split(",");
-                var mywidth = obj.instances[0].width;
-                var myheight = obj.instances[0].height;
-                if ( owidth > 0 )
-                {
-                    mywidth = owidth;
-                }
-                if ( oheight > 0 )
-                {
-                    myheight = oheight;
-                }
-		while ( a < temp.length )
-                {
-                    this.runtime.createInstance(obj, layer,parseInt(temp[a]),parseInt(temp[a+1]));
-                    myloop = 1;
-                    if ( temp[a+2].toLowerCase()  == "dul" )
-                    {
-                        while ( myloop < parseInt(temp[a+3]) )
-                        {
-                            this.runtime.createInstance(obj, layer,parseInt(temp[a])-(myloop*mywidth),parseInt(temp[a+1])-(myloop*myheight));
-                            ++myloop;
-                        }
-                    }
-                    if ( temp[a+2].toLowerCase()  == "dur" )
-                    {
-                        while ( myloop < parseInt(temp[a+3]) )
-                        {
-                            this.runtime.createInstance(obj, layer,parseInt(temp[a])+(myloop*mywidth),parseInt(temp[a+1])-(myloop*myheight));
-                            ++myloop;
-                        }
-                    }
-                    if ( temp[a+2].toLowerCase()  == "dll" )
-                    {
-                        while ( myloop < parseInt(temp[a+3]) )
-                        {
-                            this.runtime.createInstance(obj, layer,parseInt(temp[a])-(myloop*mywidth),parseInt(temp[a+1])+(myloop*myheight));
-                            ++myloop;
-                        }
-                    }
-                    if ( temp[a+2].toLowerCase()  == "dlr" )
-                    {
-                        while ( myloop < parseInt(temp[a+3]) )
-                        {
-                            this.runtime.createInstance(obj, layer,parseInt(temp[a])+(myloop*mywidth),parseInt(temp[a+1])+(myloop*myheight));
-                            ++myloop;
-                        }
-                    }
-                    if ( temp[a+2].toLowerCase()  == "ulc" )
-                    {
-                        while ( myloop < parseInt(temp[a+3]) )
-                        {
-                            this.runtime.createInstance(obj, layer,parseInt(temp[a])+(myloop*mywidth),parseInt(temp[a+1]));
-                            this.runtime.createInstance(obj, layer,parseInt(temp[a]),parseInt(temp[a+1])+(myloop*myheight));
-                            ++myloop;
-                        }
-                    }
-                    if ( temp[a+2].toLowerCase() == "urc" )
-                    {
-                        while ( myloop < parseInt(temp[a+3]) )
-                        {
-                            this.runtime.createInstance(obj, layer,parseInt(temp[a])-(myloop*mywidth),parseInt(temp[a+1]));
-                            this.runtime.createInstance(obj, layer,parseInt(temp[a]),parseInt(temp[a+1])+(myloop*myheight));
-                            ++myloop;
-                        }
-                    }
-                    if ( temp[a+2].toLowerCase()  == "llc" )
-                    {
-                        while ( myloop < parseInt(temp[a+3]) )
-                        {
-                            this.runtime.createInstance(obj, layer,parseInt(temp[a])+(myloop*mywidth),parseInt(temp[a+1]));
-                            this.runtime.createInstance(obj, layer,parseInt(temp[a]),parseInt(temp[a+1])-(myloop*myheight));
-                            ++myloop;
-                        }
-                    }
-                    if ( temp[a+2].toLowerCase() == "lrc" )
-                    {
-                        while ( myloop < parseInt(temp[a+3]) )
-                        {
-                            this.runtime.createInstance(obj, layer,parseInt(temp[a])-(myloop*mywidth),parseInt(temp[a+1]));
-                            this.runtime.createInstance(obj, layer,parseInt(temp[a]),parseInt(temp[a+1])-(myloop*myheight));
-                            ++myloop;
-                        }
-                    }
-                    if ( temp[a+2].toLowerCase()  == "r" )
-                    {
-                        while ( myloop < parseInt(temp[a+3]) )
-                        {
-                            this.runtime.createInstance(obj, layer,parseInt(temp[a])+(myloop*mywidth),parseInt(temp[a+1]));
-                            ++myloop;
-                        }
-                    }
-                    if ( temp[a+2].toLowerCase() == "l" )
-                    {
-                        while ( myloop < parseInt(temp[a+3]) )
-                        {
-                            this.runtime.createInstance(obj, layer,parseInt(temp[a])-(myloop*mywidth),parseInt(temp[a+1]));
-                            ++myloop;
-                        }
-                    }
-                    if ( temp[a+2].toLowerCase() == "u" )
-                    {
-                        while ( myloop < parseInt(temp[a+3]) )
-                        {
-                            this.runtime.createInstance(obj, layer,parseInt(temp[a]),parseInt(temp[a+1])-(myloop*myheight));
-                            ++myloop;
-                        }
-                    }
-                    if ( temp[a+2].toLowerCase() == "d" )
-                    {
-                        while ( myloop < parseInt(temp[a+3]) )
-                        {
-                            this.runtime.createInstance(obj, layer,parseInt(temp[a]),parseInt(temp[a+1])+(myloop*myheight));
-                            ++myloop;
-                        }
-                    }
-                    a = a + 4;
-                }
-	};
-        acts.draw_sprite2 = function (obj, obj2, layer, ostring, owidth, oheight, owidth2, oheight2)
-	{
-                var mypos = 0;
-                var mylength = 0;
-                var mywidth = 0;
-                var myheight = 0;
-                var mywidth2 = 0;
-                var myheight2 = 0;
-                var myloop = 0;
-                var a = 0;
-                var temp = new Array();
-                var mystring = ostring;
-                temp = mystring.split(",");
-                mywidth = obj.instances[0].width;
-                myheight = obj.instances[0].height;
-                mywidth2 = obj2.instances[0].width;
-                myheight2 = obj2.instances[0].height;
-                if ( owidth > 0 )
-                {
-                    mywidth = owidth;
-                }
-                if ( oheight > 0 )
-                {
-                    myheight = oheight;
-                }
-                if ( owidth2 > 0 )
-                {
-                    mywidth2 = owidth2;
-                }
-                if ( oheight2 > 0 )
-                {
-                    myheight2 = oheight2;
-                }
-		while ( a < temp.length )
-                {
-                    mylength = parseInt(temp[a+3]);
-                    myloop = 2;
-                    mypos = 1;
-                    if ( temp[a+2].toLowerCase()  == "r" )
-                    {
-                        var inst = this.runtime.createInstance(obj, layer,parseInt(temp[a]),parseInt(temp[a+1]));
-                        var inst2 = this.runtime.createInstance(obj2, layer,parseInt(temp[a])+((mywidth+mywidth2)/2),parseInt(temp[a+1]));
-                        while ( myloop < mylength )
-                        {
-                            this.runtime.createInstance(obj, layer,parseInt(temp[a])+(mypos*(mywidth+mywidth2)),parseInt(temp[a+1]));
-                            ++myloop;
-                            if ( myloop < mylength )
-                            {
-                                this.runtime.createInstance(obj2, layer,parseInt(temp[a])+(mypos*(mywidth+mywidth2))+((mywidth+mywidth2)/2),parseInt(temp[a+1]));
-                            }
-                            ++myloop;
-                            ++mypos;
-                        }
-                    }
-                    if ( temp[a+2].toLowerCase()  == "l" )
-                    {
-                        var inst = this.runtime.createInstance(obj, layer,parseInt(temp[a]),parseInt(temp[a+1]));
-                        var inst2 = this.runtime.createInstance(obj2, layer,parseInt(temp[a])-((mywidth+mywidth2)/2),parseInt(temp[a+1]));
-                        while ( myloop < mylength )
-                        {
-                            this.runtime.createInstance(obj, layer,parseInt(temp[a])-(mypos*(mywidth+mywidth2)),parseInt(temp[a+1]));
-                            ++myloop;
-                            if ( myloop < mylength )
-                            {
-                                this.runtime.createInstance(obj2, layer,parseInt(temp[a])-(mypos*(mywidth+mywidth2))-((mywidth+mywidth2)/2),parseInt(temp[a+1]));
-                            }
-                            ++myloop;
-                            ++mypos;
-                        }
-                    }
-                    if ( temp[a+2].toLowerCase()  == "u" )
-                    {
-                        var inst = this.runtime.createInstance(obj, layer,parseInt(temp[a]),parseInt(temp[a+1]));
-                        var inst2 = this.runtime.createInstance(obj2, layer,parseInt(temp[a]),parseInt(temp[a+1])-((myheight+myheight2)/2));
-                        while ( myloop < mylength )
-                        {
-                            this.runtime.createInstance(obj, layer,parseInt(temp[a]),parseInt(temp[a+1])-(mypos*(myheight+myheight2)));
-                            ++myloop;
-                            if ( myloop < mylength )
-                            {
-                                this.runtime.createInstance(obj2, layer,parseInt(temp[a]),parseInt(temp[a+1])-(mypos*(myheight+myheight2))-((myheight+myheight2)/2));
-                            }
-                            ++myloop;
-                            ++mypos;
-                        }
-                    }
-                    if ( temp[a+2].toLowerCase()  == "d" )
-                    {
-                        var inst = this.runtime.createInstance(obj, layer,parseInt(temp[a]),parseInt(temp[a+1]));
-                        var inst2 = this.runtime.createInstance(obj2, layer,parseInt(temp[a]),parseInt(temp[a+1])+((myheight+myheight2)/2));
-                        while ( myloop < mylength )
-                        {
-                            this.runtime.createInstance(obj, layer,parseInt(temp[a]),parseInt(temp[a+1])+(mypos*(myheight+myheight2)));
-                            ++myloop;
-                            if ( myloop < mylength )
-                            {
-                                this.runtime.createInstance(obj2, layer,parseInt(temp[a]),parseInt(temp[a+1])+(mypos*(myheight+myheight2))+((myheight+myheight2)/2));
-                            }
-                            ++myloop;
-                            ++mypos;
-                        }
-                    }
-                    a = a + 4;
-                }
-	};
-	pluginProto.exps = {};
-	var exps = pluginProto.exps;
-}());
-;
-;
-cr.plugins_.rex_TouchWrap = function(runtime)
-{
-	this.runtime = runtime;
-};
-(function ()
-{
-	var pluginProto = cr.plugins_.rex_TouchWrap.prototype;
-	pluginProto.Type = function(plugin)
-	{
-		this.plugin = plugin;
-		this.runtime = plugin.runtime;
-	};
-	var typeProto = pluginProto.Type.prototype;
-	typeProto.onCreate = function()
-	{
-	};
-	pluginProto.Instance = function(type)
-	{
-		this.type = type;
-		this.runtime = type.runtime;
-		this.touches = [];
-		this.mouseDown = false;
-		this.touchDown = false;
-        this.check_name = "TOUCHWRAP";
-		this._is_mouse_mode = false;
-        this._plugins_hook = [];
-	    this.fake_ret = {value:0,
-	                     set_any: function(value){this.value=value;},
-	                     set_int: function(value){this.value=value;},
-                         set_float: function(value){this.value=value;},
-	                    };
-	};
-	var instanceProto = pluginProto.Instance.prototype;
-	var dummyoffset = {left: 0, top: 0};
-	instanceProto.findTouch = function (id)
-	{
-		var i, len;
-		for (i = 0, len = this.touches.length; i < len; i++)
-		{
-			if (this.touches[i]["id"] === id)
-				return i;
-		}
-		return -1;
-	};
-	var appmobi_accx = 0;
-	var appmobi_accy = 0;
-	var appmobi_accz = 0;
-	function AppMobiGetAcceleration(evt)
-	{
-		appmobi_accx = evt.x;
-		appmobi_accy = evt.y;
-		appmobi_accz = evt.z;
-	};
-	var pg_accx = 0;
-	var pg_accy = 0;
-	var pg_accz = 0;
-	function PhoneGapGetAcceleration(evt)
-	{
-		pg_accx = evt.x;
-		pg_accy = evt.y;
-		pg_accz = evt.z;
-	};
-	var theInstance = null;
-	var touchinfo_cache = [];
-	function AllocTouchInfo(x, y, id, index)
-	{
-		var ret;
-		if (touchinfo_cache.length)
-			ret = touchinfo_cache.pop();
-		else
-			ret = new TouchInfo();
-		ret.init(x, y, id, index);
-		return ret;
-	};
-	function ReleaseTouchInfo(ti)
-	{
-		if (touchinfo_cache.length < 100)
-			touchinfo_cache.push(ti);
-	};
-	var GESTURE_HOLD_THRESHOLD = 15;		// max px motion for hold gesture to register
-	var GESTURE_HOLD_TIMEOUT = 500;			// time for hold gesture to register
-	var GESTURE_TAP_TIMEOUT = 333;			// time for tap gesture to register
-	var GESTURE_DOUBLETAP_THRESHOLD = 25;	// max distance apart for taps to be
-	function TouchInfo()
-	{
-		this.starttime = 0;
-		this.time = 0;
-		this.lasttime = 0;
-		this.startx = 0;
-		this.starty = 0;
-		this.x = 0;
-		this.y = 0;
-		this.lastx = 0;
-		this.lasty = 0;
-		this["id"] = 0;
-		this.startindex = 0;
-		this.triggeredHold = false;
-		this.tooFarForHold = false;
-	};
-	TouchInfo.prototype.init = function (x, y, id, index)
-	{
-		var nowtime = cr.performance_now();
-		this.time = nowtime;
-		this.lasttime = nowtime;
-		this.starttime = nowtime;
-		this.startx = x;
-		this.starty = y;
-		this.x = x;
-		this.y = y;
-		this.lastx = x;
-		this.lasty = y;
-		this["id"] = id;
-		this.startindex = index;
-		this.triggeredHold = false;
-		this.tooFarForHold = false;
-	};
-	TouchInfo.prototype.update = function (nowtime, x, y)
-	{
-		this.lasttime = this.time;
-		this.time = nowtime;
-		this.lastx = this.x;
-		this.lasty = this.y;
-		this.x = x;
-		this.y = y;
-		if (!this.tooFarForHold && cr.distanceTo(this.startx, this.starty, this.x, this.y) >= GESTURE_HOLD_THRESHOLD)
-		{
-			this.tooFarForHold = true;
-		}
-	};
-	TouchInfo.prototype.maybeTriggerHold = function (inst, index)
-	{
-		if (this.triggeredHold)
-			return;		// already triggered this gesture
-		var nowtime = cr.performance_now();
-		if (nowtime - this.starttime >= GESTURE_HOLD_TIMEOUT && !this.tooFarForHold && cr.distanceTo(this.startx, this.starty, this.x, this.y) < GESTURE_HOLD_THRESHOLD)
-		{
-			this.triggeredHold = true;
-			inst.trigger_index = this.startindex;
-			inst.trigger_id = this["id"];
-			inst.getTouchIndex = index;
-			inst.runtime.trigger(cr.plugins_.rex_TouchWrap.prototype.cnds.OnHoldGesture, inst);
-			inst.curTouchX = this.x;
-			inst.curTouchY = this.y;
-			inst.runtime.trigger(cr.plugins_.rex_TouchWrap.prototype.cnds.OnHoldGestureObject, inst);
-			inst.getTouchIndex = 0;
-		}
-	};
-	var lastTapX = -1000;
-	var lastTapY = -1000;
-	var lastTapTime = -10000;
-	TouchInfo.prototype.maybeTriggerTap = function (inst, index)
-	{
-		if (this.triggeredHold)
-			return;
-		var nowtime = cr.performance_now();
-		if (nowtime - this.starttime <= GESTURE_TAP_TIMEOUT && !this.tooFarForHold && cr.distanceTo(this.startx, this.starty, this.x, this.y) < GESTURE_HOLD_THRESHOLD)
-		{
-			inst.trigger_index = this.startindex;
-			inst.trigger_id = this["id"];
-			inst.getTouchIndex = index;
-			if ((nowtime - lastTapTime <= GESTURE_TAP_TIMEOUT * 2) && cr.distanceTo(lastTapX, lastTapY, this.x, this.y) < GESTURE_DOUBLETAP_THRESHOLD)
-			{
-				inst.runtime.trigger(cr.plugins_.rex_TouchWrap.prototype.cnds.OnDoubleTapGesture, inst);
-				inst.curTouchX = this.x;
-				inst.curTouchY = this.y;
-				inst.runtime.trigger(cr.plugins_.rex_TouchWrap.prototype.cnds.OnDoubleTapGestureObject, inst);
-				lastTapX = -1000;
-				lastTapY = -1000;
-				lastTapTime = -10000;
-			}
-			else
-			{
-				inst.runtime.trigger(cr.plugins_.rex_TouchWrap.prototype.cnds.OnTapGesture, inst);
-				inst.curTouchX = this.x;
-				inst.curTouchY = this.y;
-				inst.runtime.trigger(cr.plugins_.rex_TouchWrap.prototype.cnds.OnTapGestureObject, inst);
-				lastTapX = this.x;
-				lastTapY = this.y;
-				lastTapTime = nowtime;
-			}
-			inst.getTouchIndex = 0;
-		}
-	};
-	instanceProto.onCreate = function()
-	{
-		theInstance = this;
-		this.isWindows8 = !!(typeof window["c2isWindows8"] !== "undefined" && window["c2isWindows8"]);
-		this.orient_alpha = 0;
-		this.orient_beta = 0;
-		this.orient_gamma = 0;
-		this.acc_g_x = 0;
-		this.acc_g_y = 0;
-		this.acc_g_z = 0;
-		this.acc_x = 0;
-		this.acc_y = 0;
-		this.acc_z = 0;
-		this.curTouchX = 0;
-		this.curTouchY = 0;
-		this.trigger_index = 0;
-		this.trigger_id = 0;
-		this.getTouchIndex = 0;
-		this.useMouseInput = (this.properties[0] !== 0);
-		var elem = (this.runtime.fullscreen_mode > 0) ? document : this.runtime.canvas;
-		var elem2 = document;
-		if (this.runtime.isDirectCanvas)
-			elem2 = elem = window["Canvas"];
-		else if (this.runtime.isCocoonJs)
-			elem2 = elem = window;
-		var self = this;
-		if (window.navigator["pointerEnabled"])
-		{
-			elem.addEventListener("pointerdown",
-				function(info) {
-					self.onPointerStart(info);
-				},
-				false
-			);
-			elem.addEventListener("pointermove",
-				function(info) {
-					self.onPointerMove(info);
-				},
-				false
-			);
-			elem2.addEventListener("pointerup",
-				function(info) {
-					self.onPointerEnd(info, false);
-				},
-				false
-			);
-			elem2.addEventListener("pointercancel",
-				function(info) {
-					self.onPointerEnd(info, true);
-				},
-				false
-			);
-			if (this.runtime.canvas)
-			{
-				this.runtime.canvas.addEventListener("MSGestureHold", function(e) {
-					e.preventDefault();
-				}, false);
-				document.addEventListener("MSGestureHold", function(e) {
-					e.preventDefault();
-				}, false);
-				this.runtime.canvas.addEventListener("gesturehold", function(e) {
-					e.preventDefault();
-				}, false);
-				document.addEventListener("gesturehold", function(e) {
-					e.preventDefault();
-				}, false);
-			}
-		}
-		else if (window.navigator["msPointerEnabled"])
-		{
-			elem.addEventListener("MSPointerDown",
-				function(info) {
-					self.onPointerStart(info);
-				},
-				false
-			);
-			elem.addEventListener("MSPointerMove",
-				function(info) {
-					self.onPointerMove(info);
-				},
-				false
-			);
-			elem2.addEventListener("MSPointerUp",
-				function(info) {
-					self.onPointerEnd(info, false);
-				},
-				false
-			);
-			elem2.addEventListener("MSPointerCancel",
-				function(info) {
-					self.onPointerEnd(info, true);
-				},
-				false
-			);
-			if (this.runtime.canvas)
-			{
-				this.runtime.canvas.addEventListener("MSGestureHold", function(e) {
-					e.preventDefault();
-				}, false);
-				document.addEventListener("MSGestureHold", function(e) {
-					e.preventDefault();
-				}, false);
-			}
-		}
-		else
-		{
-			elem.addEventListener("touchstart",
-				function(info) {
-					self.onTouchStart(info);
-				},
-				false
-			);
-			elem.addEventListener("touchmove",
-				function(info) {
-					self.onTouchMove(info);
-				},
-				false
-			);
-			elem2.addEventListener("touchend",
-				function(info) {
-					self.onTouchEnd(info, false);
-				},
-				false
-			);
-			elem2.addEventListener("touchcancel",
-				function(info) {
-					self.onTouchEnd(info, true);
-				},
-				false
-			);
-		}
-		if (this.isWindows8)
-		{
-			var win8accelerometerFn = function(e) {
-					var reading = e["reading"];
-					self.acc_x = reading["accelerationX"];
-					self.acc_y = reading["accelerationY"];
-					self.acc_z = reading["accelerationZ"];
-				};
-			var win8inclinometerFn = function(e) {
-					var reading = e["reading"];
-					self.orient_alpha = reading["yawDegrees"];
-					self.orient_beta = reading["pitchDegrees"];
-					self.orient_gamma = reading["rollDegrees"];
-				};
-			var accelerometer = Windows["Devices"]["Sensors"]["Accelerometer"]["getDefault"]();
-            if (accelerometer)
-			{
-                accelerometer["reportInterval"] = Math.max(accelerometer["minimumReportInterval"], 16);
-				accelerometer.addEventListener("readingchanged", win8accelerometerFn);
+(function () {
+    var pluginProto = cr.plugins_.rex_TagText.prototype;
+    pluginProto.onCreate = function () {
+        pluginProto.acts.SetWidth = function (w) {
+            if (this.width !== w) {
+                this.width = w;
+                this.set_bbox_changed();
+                if (!this.isCanvasSizeLocked)
+                    this.renderText(this.isForceRender);
             }
-			var inclinometer = Windows["Devices"]["Sensors"]["Inclinometer"]["getDefault"]();
-			if (inclinometer)
-			{
-				inclinometer["reportInterval"] = Math.max(inclinometer["minimumReportInterval"], 16);
-				inclinometer.addEventListener("readingchanged", win8inclinometerFn);
-			}
-			document.addEventListener("visibilitychange", function(e) {
-				if (document["hidden"] || document["msHidden"])
-				{
-					if (accelerometer)
-						accelerometer.removeEventListener("readingchanged", win8accelerometerFn);
-					if (inclinometer)
-						inclinometer.removeEventListener("readingchanged", win8inclinometerFn);
-				}
-				else
-				{
-					if (accelerometer)
-						accelerometer.addEventListener("readingchanged", win8accelerometerFn);
-					if (inclinometer)
-						inclinometer.addEventListener("readingchanged", win8inclinometerFn);
-				}
-			}, false);
-		}
-		else
-		{
-			window.addEventListener("deviceorientation", function (eventData) {
-				self.orient_alpha = eventData["alpha"] || 0;
-				self.orient_beta = eventData["beta"] || 0;
-				self.orient_gamma = eventData["gamma"] || 0;
-			}, false);
-			window.addEventListener("devicemotion", function (eventData) {
-				if (eventData["accelerationIncludingGravity"])
-				{
-					self.acc_g_x = eventData["accelerationIncludingGravity"]["x"] || 0;
-					self.acc_g_y = eventData["accelerationIncludingGravity"]["y"] || 0;
-					self.acc_g_z = eventData["accelerationIncludingGravity"]["z"] || 0;
-				}
-				if (eventData["acceleration"])
-				{
-					self.acc_x = eventData["acceleration"]["x"] || 0;
-					self.acc_y = eventData["acceleration"]["y"] || 0;
-					self.acc_z = eventData["acceleration"]["z"] || 0;
-				}
-			}, false);
-		}
-		if (this.useMouseInput && !this.runtime.isDomFree)
-		{
-			jQuery(document).mousemove(
-				function(info) {
-					self.onMouseMove(info);
-				}
-			);
-			jQuery(document).mousedown(
-				function(info) {
-					self.onMouseDown(info);
-				}
-			);
-			jQuery(document).mouseup(
-				function(info) {
-					self.onMouseUp(info);
-				}
-			);
-		}
-		if (this.runtime.isAppMobi && !this.runtime.isDirectCanvas)
-		{
-			AppMobi["accelerometer"]["watchAcceleration"](AppMobiGetAcceleration, { "frequency": 40, "adjustForRotation": true });
-		}
-		if (this.runtime.isPhoneGap && navigator["accelerometer"] && navigator["accelerometer"]["watchAcceleration"])
-		{
-			navigator["accelerometer"]["watchAcceleration"](PhoneGapGetAcceleration, null, { "frequency": 40 });
-		}
-		this.runtime.tick2Me(this);
-		this.enable = (this.properties[1] == 1);
-		this.lastTouchX = null;
-		this.lastTouchY = null;
-	};
-	instanceProto.onPointerMove = function (info)
-	{
-	    if (!this.enable)
-	        return;
-		if (info["pointerType"] === info["MSPOINTER_TYPE_MOUSE"] || info["pointerType"] === "mouse")
-			return;
-	    this._is_mouse_mode = false;
-		if (info.preventDefault)
-			info.preventDefault();
-		var i = this.findTouch(info["pointerId"]);
-		var nowtime = cr.performance_now();
-		if (i >= 0)
-		{
-			var offset = this.runtime.isDomFree ? dummyoffset : jQuery(this.runtime.canvas).offset();
-			var t = this.touches[i];
-			if (nowtime - t.time < 2)
-				return;
-			t.update(nowtime, info.pageX - offset.left, info.pageY - offset.top);
-		}
-	};
-	instanceProto.onPointerStart = function (info)
-	{
-	    if (!this.enable)
-	        return;
-		if (info["pointerType"] === info["MSPOINTER_TYPE_MOUSE"] || info["pointerType"] === "mouse")
-			return;
-	    this._is_mouse_mode = false;
-		if (info.preventDefault)
-			info.preventDefault();
-		var offset = this.runtime.isDomFree ? dummyoffset : jQuery(this.runtime.canvas).offset();
-		var touchx = info.pageX - offset.left;
-		var touchy = info.pageY - offset.top;
-		var nowtime = cr.performance_now();
-		this.trigger_index = this.touches.length;
-		this.trigger_id = info["pointerId"];
-		this.touches.push(AllocTouchInfo(touchx, touchy, info["pointerId"], this.trigger_index));
-		this.runtime.isInUserInputEvent = true;
-		this.runtime.trigger(cr.plugins_.rex_TouchWrap.prototype.cnds.OnNthTouchStart, this);
-		this.runtime.trigger(cr.plugins_.rex_TouchWrap.prototype.cnds.OnTouchStart, this);
-		this.curTouchX = touchx;
-		this.curTouchY = touchy;
-		this.runtime.trigger(cr.plugins_.rex_TouchWrap.prototype.cnds.OnTouchObject, this);
-        var hooki, cnt=this._plugins_hook.length;
-        for (hooki=0; hooki<cnt; hooki++)
-		{
-			if (this._plugins_hook[hooki].OnTouchStart)
-                this._plugins_hook[hooki].OnTouchStart(this.trigger_id, this.curTouchX, this.curTouchY);
-	    }
-	    this.runtime.isInUserInputEvent = false;
-	};
-	instanceProto.onPointerEnd = function (info, isCancel)
-	{
-	    if (!this.enable)
-	        return;
-		if (info["pointerType"] === info["MSPOINTER_TYPE_MOUSE"] || info["pointerType"] === "mouse")
-			return;
-        this._is_mouse_mode = false;
-		if (info.preventDefault)
-			info.preventDefault();
-		var i = this.findTouch(info["pointerId"]);
-		this.trigger_index = (i >= 0 ? this.touches[i].startindex : -1);
-		this.trigger_id = (i >= 0 ? this.touches[i]["id"] : -1);
-		this.runtime.isInUserInputEvent = true;
-		this.runtime.trigger(cr.plugins_.rex_TouchWrap.prototype.cnds.OnNthTouchEnd, this);
-		this.runtime.trigger(cr.plugins_.rex_TouchWrap.prototype.cnds.OnTouchEnd, this);
-        if (i >= 0)
-        {
-		    this.lastTouchX = this.touches[i].x;
-		    this.lastTouchY = this.touches[i].y;
-		    this.runtime.trigger(cr.plugins_.rex_TouchWrap.prototype.cnds.OnTouchReleasedObject, this);
-		}
-        var cnt=this._plugins_hook.length, hooki;
-        for (hooki=0; hooki<cnt; hooki++)
-		{
-		    if (this._plugins_hook[hooki].OnTouchEnd)
-                this._plugins_hook[hooki].OnTouchEnd(this.trigger_id);
-		}
-		if (i >= 0)
-		{
-			if (!isCancel)
-				this.touches[i].maybeTriggerTap(this, i);
-			ReleaseTouchInfo(this.touches[i]);
-			this.touches.splice(i, 1);
-		}
-		this.runtime.isInUserInputEvent = false;
-	};
-	instanceProto.onTouchMove = function (info)
-	{
-	    if (!this.enable)
-	        return;
-		if (info.preventDefault)
-			info.preventDefault();
-		var nowtime = cr.performance_now();
-		var i, len, t, u;
-		var cnt=this._plugins_hook.length, hooki;
-		for (i = 0, len = info.changedTouches.length; i < len; i++)
-		{
-			t = info.changedTouches[i];
-			var j = this.findTouch(t["identifier"]);
-			if (j >= 0)
-			{
-				var offset = this.runtime.isDomFree ? dummyoffset : jQuery(this.runtime.canvas).offset();
-				u = this.touches[j];
-				if (nowtime - u.time < 2)
-					continue;
-				u.update(nowtime, t.pageX - offset.left, t.pageY - offset.top);
-                for (hooki=0; hooki<cnt; hooki++)
-			    {
-			    	if (this._plugins_hook[hooki].OnTouchMove)
-			    	{
-			            var touchx = t.pageX - offset.left;
-			            var touchy = t.pageY - offset.top;
-                        this._plugins_hook[hooki].OnTouchMove(t["identifier"], touchx, touchy);
-                    }
-			    }
-			}
-		}
-	};
-	instanceProto.onTouchStart = function (info)
-	{
-	    if (!this.enable)
-	        return;
-		if (info.preventDefault)
-			info.preventDefault();
-		var offset = this.runtime.isDomFree ? dummyoffset : jQuery(this.runtime.canvas).offset();
-		var nowtime = cr.performance_now();
-		this.runtime.isInUserInputEvent = true;
-		var i, len, t, j;
-        var cnt=this._plugins_hook.length, hooki;
-		for (i = 0, len = info.changedTouches.length; i < len; i++)
-		{
-			t = info.changedTouches[i];
-			j = this.findTouch(t["identifier"]);
-			if (j !== -1)
-				continue;
-			var touchx = t.pageX - offset.left;
-			var touchy = t.pageY - offset.top;
-			this.trigger_index = this.touches.length;
-			this.trigger_id = t["identifier"];
-			this.touches.push(AllocTouchInfo(touchx, touchy, t["identifier"], this.trigger_index));
-			this.runtime.trigger(cr.plugins_.rex_TouchWrap.prototype.cnds.OnNthTouchStart, this);
-			this.runtime.trigger(cr.plugins_.rex_TouchWrap.prototype.cnds.OnTouchStart, this);
-			this.curTouchX = touchx;
-			this.curTouchY = touchy;
-			this.runtime.trigger(cr.plugins_.rex_TouchWrap.prototype.cnds.OnTouchObject, this);
-            for (hooki=0; hooki<cnt; hooki++)
-			{
-				if (this._plugins_hook[hooki].OnTouchStart)
-                    this._plugins_hook[hooki].OnTouchStart(this.trigger_id, this.curTouchX, this.curTouchY);
-			}
-		}
-		this.runtime.isInUserInputEvent = false;
-	};
-	instanceProto.onTouchEnd = function (info, isCancel)
-	{
-	    if (!this.enable)
-	        return;
-		if (info.preventDefault)
-			info.preventDefault();
-		this.runtime.isInUserInputEvent = true;
-		var i, len, t, j;
-        var cnt=this._plugins_hook.length, hooki;
-		for (i = 0, len = info.changedTouches.length; i < len; i++)
-		{
-			t = info.changedTouches[i];
-			j = this.findTouch(t["identifier"]);
-			if (j >= 0)
-			{
-				this.trigger_index = this.touches[j].startindex;
-				this.trigger_id = this.touches[j]["id"];
-				this.runtime.trigger(cr.plugins_.rex_TouchWrap.prototype.cnds.OnNthTouchEnd, this);
-				this.runtime.trigger(cr.plugins_.rex_TouchWrap.prototype.cnds.OnTouchEnd, this);
-		        this.lastTouchX = this.touches[j].x;
-		        this.lastTouchY = this.touches[j].y;
-				this.runtime.trigger(cr.plugins_.rex_TouchWrap.prototype.cnds.OnTouchReleasedObject, this);
-                for (hooki=0; hooki<cnt; hooki++)
-			    {
-			        if (this._plugins_hook[hooki].OnTouchEnd)
-                        this._plugins_hook[hooki].OnTouchEnd(this.trigger_id);
-			    }
-				if (!isCancel)
-					this.touches[j].maybeTriggerTap(this, j);
-				ReleaseTouchInfo(this.touches[j]);
-				this.touches.splice(j, 1);
-			}
-		}
-		this.runtime.isInUserInputEvent = false;
-	};
-	instanceProto.getAlpha = function ()
-	{
-		if (this.runtime.isAppMobi && this.orient_alpha === 0 && appmobi_accz !== 0)
-			return appmobi_accz * 90;
-		else if (this.runtime.isPhoneGap  && this.orient_alpha === 0 && pg_accz !== 0)
-			return pg_accz * 90;
-		else
-			return this.orient_alpha;
-	};
-	instanceProto.getBeta = function ()
-	{
-		if (this.runtime.isAppMobi && this.orient_beta === 0 && appmobi_accy !== 0)
-			return appmobi_accy * -90;
-		else if (this.runtime.isPhoneGap  && this.orient_beta === 0 && pg_accy !== 0)
-			return pg_accy * -90;
-		else
-			return this.orient_beta;
-	};
-	instanceProto.getGamma = function ()
-	{
-		if (this.runtime.isAppMobi && this.orient_gamma === 0 && appmobi_accx !== 0)
-			return appmobi_accx * 90;
-		else if (this.runtime.isPhoneGap  && this.orient_gamma === 0 && pg_accx !== 0)
-			return pg_accx * 90;
-		else
-			return this.orient_gamma;
-	};
-	var noop_func = function(){};
-	instanceProto.onMouseDown = function(info)
-	{
-	    if (!this.enable)
-	        return;
-	    this._is_mouse_mode = true;
-		this.mouseDown = true;
-		if (info.preventDefault && this.runtime.had_a_click && !this.runtime.isMobile)
-			info.preventDefault();
-		var t = { pageX: info.pageX, pageY: info.pageY, "identifier": 0 };
-		var fakeinfo = { changedTouches: [t] };
-        this.touches.length = 0;
-		this.onTouchStart(fakeinfo);
-	};
-	instanceProto.onMouseMove = function(info)
-	{
-	    if (!this.enable)
-	        return;
-        this._is_mouse_mode = true;
-		var t = { pageX: info.pageX, pageY: info.pageY, "identifier": 0 };
-		var fakeinfo = { changedTouches: [t] };
-		if (this.touches.length==0)
-		    this._fake_onTouchStart(fakeinfo);
-		else
-		    this.onTouchMove(fakeinfo);
-	};
-	instanceProto.onMouseUp = function(info)
-	{
-	    if (!this.enable)
-	        return;
-	    this._is_mouse_mode = true;
-		this.mouseDown = false;
-		if (info.preventDefault && this.runtime.had_a_click && !this.runtime.isMobile)
-			info.preventDefault();
-		this.runtime.had_a_click = true;
-		var t = { pageX: info.pageX, pageY: info.pageY, "identifier": 0 };
-		var fakeinfo = { changedTouches: [t] };
-		this.onTouchEnd(fakeinfo);
-		this._fake_onTouchStart(fakeinfo);
-	};
-	instanceProto.tick2 = function()
-	{
-	    if (!this.enable)
-	        return;
-		var i, len, t;
-		var nowtime = cr.performance_now();
-		for (i = 0, len = this.touches.length; i < len; ++i)
-		{
-			t = this.touches[i];
-			if (t.time <= nowtime - 50)
-				t.lasttime = nowtime;
-			t.maybeTriggerHold(this, i);
-		}
-		this.lastTouchX = null;
-		this.lastTouchY = null;
-	};
-	function Cnds() {};
-	Cnds.prototype.OnTouchStart = function ()
-	{
-		return true;
-	};
-	Cnds.prototype.OnTouchEnd = function ()
-	{
-		return true;
-	};
-	Cnds.prototype.IsInTouch = function ()
-	{
-		return this.IsInTouch();
-	};
-	Cnds.prototype.OnTouchObject = function (type)
-	{
-		if (!type)
-			return false;
-		return this.runtime.testAndSelectCanvasPointOverlap(type, this.curTouchX, this.curTouchY, false);
-	};
-	var touching = [];
-	Cnds.prototype.IsTouchingObject = function (type)
-	{
-        if (!this.IsInTouch())
+        };
+    };
+    pluginProto.Type = function (plugin) {
+        this.plugin = plugin;
+        this.runtime = plugin.runtime;
+    };
+    var typeProto = pluginProto.Type.prototype;
+    typeProto.onCreate = function () {};
+    typeProto.onLostWebGLContext = function () {
+        if (this.is_family)
             return;
-		if (!type)
-			return false;
-		var sol = type.getCurrentSol();
-		var instances = sol.getObjects();
-		var px, py;
-		var i, leni, j, lenj;
-		for (i = 0, leni = instances.length; i < leni; i++)
-		{
-			var inst = instances[i];
-			inst.update_bbox();
-			for (j = 0, lenj = this.touches.length; j < lenj; j++)
-			{
-				var touch = this.touches[j];
-				px = inst.layer.canvasToLayer(touch.x, touch.y, true);
-				py = inst.layer.canvasToLayer(touch.x, touch.y, false);
-				if (inst.contains_pt(px, py))
-				{
-					touching.push(inst);
-					break;
-				}
-			}
-		}
-		if (touching.length)
-		{
-			sol.select_all = false;
-			cr.shallowAssignArray(sol.instances, touching);
-			type.applySolToContainer();
-			touching.length = 0;
-			return true;
-		}
-		else
-			return false;
-	};
-	Cnds.prototype.CompareTouchSpeed = function (index, cmp, s)
-	{
-		index = Math.floor(index);
-		if (index < 0 || index >= this.touches.length)
-			return false;
-		var t = this.touches[index];
-		var dist = cr.distanceTo(t.x, t.y, t.lastx, t.lasty);
-		var timediff = (t.time - t.lasttime) / 1000;
-		var speed = 0;
-		if (timediff > 0)
-			speed = dist / timediff;
-		return cr.do_cmp(speed, cmp, s);
-	};
-	Cnds.prototype.OrientationSupported = function ()
-	{
-		return typeof window["DeviceOrientationEvent"] !== "undefined";
-	};
-	Cnds.prototype.MotionSupported = function ()
-	{
-		return typeof window["DeviceMotionEvent"] !== "undefined";
-	};
-	Cnds.prototype.CompareOrientation = function (orientation_, cmp_, angle_)
-	{
-		var v = 0;
-		if (orientation_ === 0)
-			v = this.getAlpha();
-		else if (orientation_ === 1)
-			v = this.getBeta();
-		else
-			v = this.getGamma();
-		return cr.do_cmp(v, cmp_, angle_);
-	};
-	Cnds.prototype.CompareAcceleration = function (acceleration_, cmp_, angle_)
-	{
-		var v = 0;
-		if (acceleration_ === 0)
-			v = this.acc_g_x;
-		else if (acceleration_ === 1)
-			v = this.acc_g_y;
-		else if (acceleration_ === 2)
-			v = this.acc_g_z;
-		else if (acceleration_ === 3)
-			v = this.acc_x;
-		else if (acceleration_ === 4)
-			v = this.acc_y;
-		else if (acceleration_ === 5)
-			v = this.acc_z;
-		return cr.do_cmp(v, cmp_, angle_);
-	};
-	Cnds.prototype.OnNthTouchStart = function (touch_)
-	{
-		touch_ = Math.floor(touch_);
-		return touch_ === this.trigger_index;
-	};
-	Cnds.prototype.OnNthTouchEnd = function (touch_)
-	{
-		touch_ = Math.floor(touch_);
-		return touch_ === this.trigger_index;
-	};
-	Cnds.prototype.HasNthTouch = function (touch_)
-	{
-		touch_ = Math.floor(touch_);
-		return this.touches.length >= touch_ + 1;
-	};
-	Cnds.prototype.OnHoldGesture = function ()
-	{
-		return true;
-	};
-	Cnds.prototype.OnTapGesture = function ()
-	{
-		return true;
-	};
-	Cnds.prototype.OnDoubleTapGesture = function ()
-	{
-		return true;
-	};
-	Cnds.prototype.OnHoldGestureObject = function (type)
-	{
-		if (!type)
-			return false;
-		return this.runtime.testAndSelectCanvasPointOverlap(type, this.curTouchX, this.curTouchY, false);
-	};
-	Cnds.prototype.OnTapGestureObject = function (type)
-	{
-		if (!type)
-			return false;
-		return this.runtime.testAndSelectCanvasPointOverlap(type, this.curTouchX, this.curTouchY, false);
-	};
-	Cnds.prototype.OnDoubleTapGestureObject = function (type)
-	{
-		if (!type)
-			return false;
-		return this.runtime.testAndSelectCanvasPointOverlap(type, this.curTouchX, this.curTouchY, false);
-	};
-	Cnds.prototype.OnTouchReleasedObject = function (type)
-	{
-		if (!type)
-			return false;
-		return this.runtime.testAndSelectCanvasPointOverlap(type, this.lastTouchX, this.lastTouchY, false);
-	};
-	pluginProto.cnds = new Cnds();
-    function Acts() {};
-    pluginProto.acts = new Acts();
-    Acts.prototype.SetEnable = function(en)
-    {
-        this.enable = (en==1);
+        var i, len, inst;
+        for (i = 0, len = this.instances.length; i < len; i++) {
+            inst = this.instances[i];
+            inst.mycanvas = null;
+            inst.myctx = null;
+            inst.mytex = null;
+        }
     };
-	function Exps() {};
-	Exps.prototype.TouchCount = function (ret)
-	{
-		ret.set_int(this.touches.length);
-	};
-	Exps.prototype.X = function (ret, layerparam)
-	{
-		var index = this.getTouchIndex;
-		if (index < 0 || index >= this.touches.length)
-		{
-			ret.set_float(0);
-			return;
-		}
-		var layer, oldScale, oldZoomRate, oldParallaxX, oldAngle;
-		if (cr.is_undefined(layerparam))
-		{
-			layer = this.runtime.getLayerByNumber(0);
-			oldScale = layer.scale;
-			oldZoomRate = layer.zoomRate;
-			oldParallaxX = layer.parallaxX;
-			oldAngle = layer.angle;
-			layer.scale = this.runtime.running_layout.scale;
-			layer.zoomRate = 1.0;
-			layer.parallaxX = 1.0;
-			layer.angle = this.runtime.running_layout.angle;
-			ret.set_float(layer.canvasToLayer(this.touches[index].x, this.touches[index].y, true));
-			layer.scale = oldScale;
-			layer.zoomRate = oldZoomRate;
-			layer.parallaxX = oldParallaxX;
-			layer.angle = oldAngle;
-		}
-		else
-		{
-			if (cr.is_number(layerparam))
-				layer = this.runtime.getLayerByNumber(layerparam);
-			else
-				layer = this.runtime.getLayerByName(layerparam);
-			if (layer)
-				ret.set_float(layer.canvasToLayer(this.touches[index].x, this.touches[index].y, true));
-			else
-				ret.set_float(0);
-		}
-	};
-	Exps.prototype.XAt = function (ret, index, layerparam)
-	{
-		index = Math.floor(index);
-		if (index < 0 || index >= this.touches.length)
-		{
-			ret.set_float(0);
-			return;
-		}
-		var layer, oldScale, oldZoomRate, oldParallaxX, oldAngle;
-		if (cr.is_undefined(layerparam))
-		{
-			layer = this.runtime.getLayerByNumber(0);
-			oldScale = layer.scale;
-			oldZoomRate = layer.zoomRate;
-			oldParallaxX = layer.parallaxX;
-			oldAngle = layer.angle;
-			layer.scale = this.runtime.running_layout.scale;
-			layer.zoomRate = 1.0;
-			layer.parallaxX = 1.0;
-			layer.angle = this.runtime.running_layout.angle;
-			ret.set_float(layer.canvasToLayer(this.touches[index].x, this.touches[index].y, true));
-			layer.scale = oldScale;
-			layer.zoomRate = oldZoomRate;
-			layer.parallaxX = oldParallaxX;
-			layer.angle = oldAngle;
-		}
-		else
-		{
-			if (cr.is_number(layerparam))
-				layer = this.runtime.getLayerByNumber(layerparam);
-			else
-				layer = this.runtime.getLayerByName(layerparam);
-			if (layer)
-				ret.set_float(layer.canvasToLayer(this.touches[index].x, this.touches[index].y, true));
-			else
-				ret.set_float(0);
-		}
-	};
-	Exps.prototype.XForID = function (ret, id, layerparam)
-	{
-		var index = this.findTouch(id);
-		if (index < 0)
-		{
-			ret.set_float(0);
-			return;
-		}
-		var touch = this.touches[index];
-		var layer, oldScale, oldZoomRate, oldParallaxX, oldAngle;
-		if (cr.is_undefined(layerparam))
-		{
-			layer = this.runtime.getLayerByNumber(0);
-			oldScale = layer.scale;
-			oldZoomRate = layer.zoomRate;
-			oldParallaxX = layer.parallaxX;
-			oldAngle = layer.angle;
-			layer.scale = this.runtime.running_layout.scale;
-			layer.zoomRate = 1.0;
-			layer.parallaxX = 1.0;
-			layer.angle = this.runtime.running_layout.angle;
-			ret.set_float(layer.canvasToLayer(touch.x, touch.y, true));
-			layer.scale = oldScale;
-			layer.zoomRate = oldZoomRate;
-			layer.parallaxX = oldParallaxX;
-			layer.angle = oldAngle;
-		}
-		else
-		{
-			if (cr.is_number(layerparam))
-				layer = this.runtime.getLayerByNumber(layerparam);
-			else
-				layer = this.runtime.getLayerByName(layerparam);
-			if (layer)
-				ret.set_float(layer.canvasToLayer(touch.x, touch.y, true));
-			else
-				ret.set_float(0);
-		}
-	};
-	Exps.prototype.Y = function (ret, layerparam)
-	{
-		var index = this.getTouchIndex;
-		if (index < 0 || index >= this.touches.length)
-		{
-			ret.set_float(0);
-			return;
-		}
-		var layer, oldScale, oldZoomRate, oldParallaxY, oldAngle;
-		if (cr.is_undefined(layerparam))
-		{
-			layer = this.runtime.getLayerByNumber(0);
-			oldScale = layer.scale;
-			oldZoomRate = layer.zoomRate;
-			oldParallaxY = layer.parallaxY;
-			oldAngle = layer.angle;
-			layer.scale = this.runtime.running_layout.scale;
-			layer.zoomRate = 1.0;
-			layer.parallaxY = 1.0;
-			layer.angle = this.runtime.running_layout.angle;
-			ret.set_float(layer.canvasToLayer(this.touches[index].x, this.touches[index].y, false));
-			layer.scale = oldScale;
-			layer.zoomRate = oldZoomRate;
-			layer.parallaxY = oldParallaxY;
-			layer.angle = oldAngle;
-		}
-		else
-		{
-			if (cr.is_number(layerparam))
-				layer = this.runtime.getLayerByNumber(layerparam);
-			else
-				layer = this.runtime.getLayerByName(layerparam);
-			if (layer)
-				ret.set_float(layer.canvasToLayer(this.touches[index].x, this.touches[index].y, false));
-			else
-				ret.set_float(0);
-		}
-	};
-	Exps.prototype.YAt = function (ret, index, layerparam)
-	{
-		index = Math.floor(index);
-		if (index < 0 || index >= this.touches.length)
-		{
-			ret.set_float(0);
-			return;
-		}
-		var layer, oldScale, oldZoomRate, oldParallaxY, oldAngle;
-		if (cr.is_undefined(layerparam))
-		{
-			layer = this.runtime.getLayerByNumber(0);
-			oldScale = layer.scale;
-			oldZoomRate = layer.zoomRate;
-			oldParallaxY = layer.parallaxY;
-			oldAngle = layer.angle;
-			layer.scale = this.runtime.running_layout.scale;
-			layer.zoomRate = 1.0;
-			layer.parallaxY = 1.0;
-			layer.angle = this.runtime.running_layout.angle;
-			ret.set_float(layer.canvasToLayer(this.touches[index].x, this.touches[index].y, false));
-			layer.scale = oldScale;
-			layer.zoomRate = oldZoomRate;
-			layer.parallaxY = oldParallaxY;
-			layer.angle = oldAngle;
-		}
-		else
-		{
-			if (cr.is_number(layerparam))
-				layer = this.runtime.getLayerByNumber(layerparam);
-			else
-				layer = this.runtime.getLayerByName(layerparam);
-			if (layer)
-				ret.set_float(layer.canvasToLayer(this.touches[index].x, this.touches[index].y, false));
-			else
-				ret.set_float(0);
-		}
-	};
-	Exps.prototype.YForID = function (ret, id, layerparam)
-	{
-		var index = this.findTouch(id);
-		if (index < 0)
-		{
-			ret.set_float(0);
-			return;
-		}
-		var touch = this.touches[index];
-		var layer, oldScale, oldZoomRate, oldParallaxY, oldAngle;
-		if (cr.is_undefined(layerparam))
-		{
-			layer = this.runtime.getLayerByNumber(0);
-			oldScale = layer.scale;
-			oldZoomRate = layer.zoomRate;
-			oldParallaxY = layer.parallaxY;
-			oldAngle = layer.angle;
-			layer.scale = this.runtime.running_layout.scale;
-			layer.zoomRate = 1.0;
-			layer.parallaxY = 1.0;
-			layer.angle = this.runtime.running_layout.angle;
-			ret.set_float(layer.canvasToLayer(touch.x, touch.y, false));
-			layer.scale = oldScale;
-			layer.zoomRate = oldZoomRate;
-			layer.parallaxY = oldParallaxY;
-			layer.angle = oldAngle;
-		}
-		else
-		{
-			if (cr.is_number(layerparam))
-				layer = this.runtime.getLayerByNumber(layerparam);
-			else
-				layer = this.runtime.getLayerByName(layerparam);
-			if (layer)
-				ret.set_float(layer.canvasToLayer(touch.x, touch.y, false));
-			else
-				ret.set_float(0);
-		}
-	};
-	Exps.prototype.AbsoluteX = function (ret)
-	{
-		if (this.touches.length)
-			ret.set_float(this.touches[0].x);
-		else
-			ret.set_float(0);
-	};
-	Exps.prototype.AbsoluteXAt = function (ret, index)
-	{
-		index = Math.floor(index);
-		if (index < 0 || index >= this.touches.length)
-		{
-			ret.set_float(0);
-			return;
-		}
-		ret.set_float(this.touches[index].x);
-	};
-	Exps.prototype.AbsoluteXForID = function (ret, id)
-	{
-		var index = this.findTouch(id);
-		if (index < 0)
-		{
-			ret.set_float(0);
-			return;
-		}
-		var touch = this.touches[index];
-		ret.set_float(touch.x);
-	};
-	Exps.prototype.AbsoluteY = function (ret)
-	{
-		if (this.touches.length)
-			ret.set_float(this.touches[0].y);
-		else
-			ret.set_float(0);
-	};
-	Exps.prototype.AbsoluteYAt = function (ret, index)
-	{
-		index = Math.floor(index);
-		if (index < 0 || index >= this.touches.length)
-		{
-			ret.set_float(0);
-			return;
-		}
-		ret.set_float(this.touches[index].y);
-	};
-	Exps.prototype.AbsoluteYForID = function (ret, id)
-	{
-		var index = this.findTouch(id);
-		if (index < 0)
-		{
-			ret.set_float(0);
-			return;
-		}
-		var touch = this.touches[index];
-		ret.set_float(touch.y);
-	};
-	Exps.prototype.SpeedAt = function (ret, index)
-	{
-		index = Math.floor(index);
-		if (index < 0 || index >= this.touches.length)
-		{
-			ret.set_float(0);
-			return;
-		}
-		var t = this.touches[index];
-		var dist = cr.distanceTo(t.x, t.y, t.lastx, t.lasty);
-		var timediff = (t.time - t.lasttime) / 1000;
-		if (timediff === 0)
-			ret.set_float(0);
-		else
-			ret.set_float(dist / timediff);
-	};
-	Exps.prototype.SpeedForID = function (ret, id)
-	{
-		var index = this.findTouch(id);
-		if (index < 0)
-		{
-			ret.set_float(0);
-			return;
-		}
-		var touch = this.touches[index];
-		var dist = cr.distanceTo(touch.x, touch.y, touch.lastx, touch.lasty);
-		var timediff = (touch.time - touch.lasttime) / 1000;
-		if (timediff === 0)
-			ret.set_float(0);
-		else
-			ret.set_float(dist / timediff);
-	};
-	Exps.prototype.AngleAt = function (ret, index)
-	{
-		index = Math.floor(index);
-		if (index < 0 || index >= this.touches.length)
-		{
-			ret.set_float(0);
-			return;
-		}
-		var t = this.touches[index];
-		ret.set_float(cr.to_degrees(cr.angleTo(t.lastx, t.lasty, t.x, t.y)));
-	};
-	Exps.prototype.AngleForID = function (ret, id)
-	{
-		var index = this.findTouch(id);
-		if (index < 0)
-		{
-			ret.set_float(0);
-			return;
-		}
-		var touch = this.touches[index];
-		ret.set_float(cr.to_degrees(cr.angleTo(touch.lastx, touch.lasty, touch.x, touch.y)));
-	};
-	Exps.prototype.Alpha = function (ret)
-	{
-		ret.set_float(this.getAlpha());
-	};
-	Exps.prototype.Beta = function (ret)
-	{
-		ret.set_float(this.getBeta());
-	};
-	Exps.prototype.Gamma = function (ret)
-	{
-		ret.set_float(this.getGamma());
-	};
-	Exps.prototype.AccelerationXWithG = function (ret)
-	{
-		ret.set_float(this.acc_g_x);
-	};
-	Exps.prototype.AccelerationYWithG = function (ret)
-	{
-		ret.set_float(this.acc_g_y);
-	};
-	Exps.prototype.AccelerationZWithG = function (ret)
-	{
-		ret.set_float(this.acc_g_z);
-	};
-	Exps.prototype.AccelerationX = function (ret)
-	{
-		ret.set_float(this.acc_x);
-	};
-	Exps.prototype.AccelerationY = function (ret)
-	{
-		ret.set_float(this.acc_y);
-	};
-	Exps.prototype.AccelerationZ = function (ret)
-	{
-		ret.set_float(this.acc_z);
-	};
-	Exps.prototype.TouchIndex = function (ret)
-	{
-		ret.set_int(this.trigger_index);
-	};
-	Exps.prototype.TouchID = function (ret)
-	{
-		ret.set_float(this.trigger_id);
-	};
-	pluginProto.exps = new Exps();
-	instanceProto._fake_onTouchStart = function (info)
-	{
-		if (info.preventDefault)
-			info.preventDefault();
-		var offset = this.runtime.isDomFree ? dummyoffset : jQuery(this.runtime.canvas).offset();
-		var nowtime = cr.performance_now();
-		var i, len, t;
-		for (i = 0, len = info.changedTouches.length; i < len; i++)
-		{
-			t = info.changedTouches[i];
-			var touchx = t.pageX - offset.left;
-			var touchy = t.pageY - offset.top;
-			this.trigger_index = this.touches.length;
-            this.touches.push(AllocTouchInfo(touchx, touchy, t["identifier"], this.trigger_index));
-		}
-	};
-    instanceProto.HookMe = function (obj)
-    {
-        this._plugins_hook.push(obj);
+    pluginProto.Instance = function (type) {
+        this.type = type;
+        this.runtime = type.runtime;
+        this.text_changed = true;
     };
-    instanceProto.UnHookMe = function (obj)
-    {
-        var i, cnt=this._plugins_hook.length, hookobj;
-        for (i=0; i<cnt; i++)
-        {
-            hookobj = this._plugins_hook[i];
-            if (obj === hookobj)
-            {
-                cr.arrayRemove(this._plugins_hook, i);
+    var instanceProto = pluginProto.Instance.prototype;
+    var requestedWebFonts = {}; // already requested web fonts have an entry here
+    var lineJoinMode = ["miter", "round", "bevel"];
+    instanceProto.onCreate = function () {
+        this.text = "";
+        this.set_text(this.properties[0]);
+        this.visible = (this.properties[1] === 0); // 0=visible, 1=invisible
+        this.font = this.properties[2];
+        this.color = this.properties[3];
+        this.stroke = "none";
+        this.halign = this.properties[4]; // 0=left, 1=center, 2=right
+        this.valign = this.properties[5]; // 0=top, 1=center, 2=bottom
+        this.textShadow = "";
+        this.wrapbyword = (this.properties[7] === 0); // 0=word, 1=character
+        this.lastwidth = this.width;
+        this.lastwrapwidth = this.width;
+        this.lastheight = this.height;
+        this.lineHeightOffset = this.properties[8];
+        this.baseLineMode = this.properties[9];
+        this.vshift = this.properties[10];
+        this.isForceRender = (this.properties[11] === 1);
+        this.LockCanvasSize((this.properties[12] === 1), this.width, this.height);
+        this.facename = "";
+        this.fontstyle = "";
+        this.ptSize = 0;
+        this.textWidth = 0;
+        this.textHeight = 0;
+        this.parseFont();
+        this.mycanvas = null;
+        this.myctx = null;
+        this.mytex = null;
+        this.need_text_redraw = false;
+        this.last_render_tick = this.runtime.tickcount;
+        if (this.recycled)
+            this.rcTex.set(0, 0, 1, 1);
+        else
+            this.rcTex = new cr.rect(0, 0, 1, 1);
+        if (this.runtime.glwrap)
+            this.runtime.tickMe(this);
+;
+        this.tagInfo = null;
+        if (!this.recycled) {
+            this.tagText = new CanvasText();
+        }
+        this.tagText.Reset(this);
+        this.tagText.textBaseline = (this.baseLineMode === 0) ? "alphabetic" : "top";
+        this.tagText.backgroundColor = this.properties[13];
+        if (this.text)
+            this.renderText(this.isForceRender);
+    };
+    instanceProto.parseFont = function () {
+        var arr = this.font.split(" ");
+        var i;
+        for (i = 0; i < arr.length; i++) {
+            if (arr[i].substr(arr[i].length - 2, 2) === "pt") {
+                this.ptSize = parseInt(arr[i].substr(0, arr[i].length - 2));
+                this.pxHeight = Math.ceil((this.ptSize / 72.0) * 96.0) + 4; // assume 96dpi...
+                if (i > 0)
+                    this.fontstyle = arr[i - 1];
+                this.facename = arr[i + 1];
+                for (i = i + 2; i < arr.length; i++)
+                    this.facename += " " + arr[i];
                 break;
             }
         }
     };
-    instanceProto.UseMouseInput = function()
-    {
-        return this.useMouseInput;
+    instanceProto.saveToJSON = function () {
+        return {
+            "t": this.text,
+            "f": this.font,
+            "c": this.color,
+            "ha": this.halign,
+            "va": this.valign,
+            "wr": this.wrapbyword,
+            "lho": this.lineHeightOffset,
+            "vs": this.vshift,
+            "fn": this.facename,
+            "fs": this.fontstyle,
+            "ps": this.ptSize,
+            "pxh": this.pxHeight,
+            "tw": this.textWidth,
+            "th": this.textHeight,
+            "ts": this.textShadow,
+            "lrt": this.last_render_tick,
+            "bl": this.tagText.textBaseline,
+            "txtObj": this.tagText.saveToJSON(),
+            "isLcs": this.isCanvasSizeLocked,
+            "lcw": this.lockedCanvasWidth,
+            "lch": this.lockedCanvasHeight,
+        };
+    };
+    instanceProto.loadFromJSON = function (o) {
+        this.text = o["t"];
+        this.font = o["f"];
+        this.color = o["c"];
+        this.halign = o["ha"];
+        this.valign = o["va"];
+        this.wrapbyword = o["wr"];
+        this.lineHeightOffset = o["lho"];
+        this.vshift = o["vs"];
+        this.facename = o["fn"];
+        this.fontstyle = o["fs"];
+        this.ptSize = o["ps"];
+        this.pxHeight = o["pxh"];
+        this.textWidth = o["tw"];
+        this.textHeight = o["th"];
+        this.textShadow = o["ts"];
+        this.last_render_tick = o["lrt"];
+        this.text_changed = true;
+        this.lastwidth = this.width;
+        this.lastwrapwidth = this.width;
+        this.lastheight = this.height;
+        this.tagText.textBaseline = o["bl"];
+        this.tagText.loadFromJSON(o["txtObj"]);
+        this.isCanvasSizeLocked = o["isLcs"];
+        this.lockedCanvasWidth = o["lcw"];
+        this.lockedCanvasHeight = o["lch"];
+    };
+    instanceProto.tick = function () {
+        if (this.runtime.glwrap && this.mytex && (this.runtime.tickcount - this.last_render_tick >= 300)) {
+            var layer = this.layer;
+            this.update_bbox();
+            var bbox = this.bbox;
+            if (bbox.right < layer.viewLeft || bbox.bottom < layer.viewTop || bbox.left > layer.viewRight || bbox.top > layer.viewBottom) {
+                this.runtime.glwrap.deleteTexture(this.mytex);
+                this.mytex = null;
+                this.myctx = null;
+                this.mycanvas = null;
+            }
+        }
+    };
+    instanceProto.onDestroy = function () {
+        this.myctx = null;
+        this.mycanvas = null;
+        if (this.runtime.glwrap && this.mytex)
+            this.runtime.glwrap.deleteTexture(this.mytex);
+        this.mytex = null;
+    };
+    instanceProto.updateFont = function () {
+        this.font = this.fontstyle + " " + this.ptSize.toString() + "pt " + this.facename;
+        this.renderText(this.isForceRender);
+    };
+    instanceProto.draw = function (ctx, glmode, is_ignore) {
+        var isCtxSave = false;
+        var width = (this.isCanvasSizeLocked) ? this.lockedCanvasWidth : this.width;
+        var height = (this.isCanvasSizeLocked) ? this.lockedCanvasHeight : this.height;
+        ctx.globalAlpha = glmode ? 1 : this.opacity;
+        var myscale = 1;
+        if (glmode) {
+            myscale = this.layer.getScale();
+            if (!isCtxSave) {
+                ctx.save();
+                isCtxSave = true;
+            }
+            ctx.scale(myscale, myscale);
+        }
+        if (this.text_changed || width !== this.lastwrapwidth) {
+            this.tagText.text_changed = true; // it will update pens (wordwrap) to redraw
+            this.text_changed = false;
+            this.lastwrapwidth = width;
+        }
+        this.update_bbox();
+        var penX = glmode ? 0 : this.bquad.tlx;
+        var penY = glmode ? 0 : this.bquad.tly;
+        if (this.runtime.pixel_rounding) {
+            penX = (penX + 0.5) | 0;
+            penY = (penY + 0.5) | 0;
+        }
+        if (!glmode) {
+            var isResized = (width !== this.width) || (height !== this.height);
+            var isRotated = (this.angle !== 0);
+            if (isRotated || isResized) {
+                if (!isCtxSave) {
+                    ctx.save();
+                    isCtxSave = true;
+                }
+                if (isResized) {
+                    var scalew = this.width / width;
+                    var scaleh = this.height / height;
+                    ctx.scale(scalew, scaleh);
+                    ctx.translate(penX / scalew, penY / scaleh);
+                    penX = 0;
+                    penY = 0;
+                }
+                if (isRotated) {
+                    if ((penX !== 0) || (penY !== 0))
+                        ctx.translate(penX, penY);
+                    ctx.rotate(this.angle);
+                }
+            }
+        }
+        var lineHeight = this.pxHeight;
+        lineHeight += (this.lineHeightOffset * this.runtime.devicePixelRatio);
+        this.tagText.canvas = ctx.canvas;
+        this.tagText.context = ctx;
+        this.tagText.defaultProperties.family = this.facename;
+        this.tagText.defaultProperties.ptSize = this.ptSize.toString() + "pt";
+        this.tagText.defaultProperties.style = this.fontstyle;
+        this.tagText.defaultProperties.color = this.color;
+        this.tagText.defaultProperties.stroke = this.stroke;
+        this.tagText.defaultProperties.shadow = this.textShadow;
+        this.tagText.lineHeight = lineHeight;
+        this.tagText.textInfo["text"] = this.text;
+        this.tagText.textInfo["x"] = penX;
+        this.tagText.textInfo["y"] = penY;
+        this.tagText.textInfo["boxWidth"] = width;
+        this.tagText.textInfo["boxHeight"] = height;
+        this.tagText.textInfo["ignore"] = is_ignore;
+        this.tagText.drawText();
+        if (isCtxSave)
+            ctx.restore();
+        this.last_render_tick = this.runtime.tickcount;
+    };
+    instanceProto.drawGL = function (glw) {
+        if (this.width < 1 || this.height < 1)
+            return;
+        var need_redraw = this.text_changed || this.need_text_redraw;
+        this.need_text_redraw = false;
+        var layerScale = this.layer.getScale();
+        var layerAngle = this.layer.getAngle();
+        var rcTex = this.rcTex;
+        var floatscaledwidth = layerScale * this.width;
+        var floatscaledheight = layerScale * this.height;
+        var scaledwidth = Math.ceil(floatscaledwidth);
+        var scaledheight = Math.ceil(floatscaledheight);
+        var halfw = this.runtime.draw_width / 2;
+        var halfh = this.runtime.draw_height / 2;
+        var canvaswidth = (!this.isCanvasSizeLocked) ? scaledwidth : Math.ceil(layerScale * this.lockedCanvasWidth);
+        var canvasheight = (!this.isCanvasSizeLocked) ? scaledheight : Math.ceil(layerScale * this.lockedCanvasHeight);
+        if (!this.myctx) {
+            this.mycanvas = document.createElement("canvas");
+            this.mycanvas.width = canvaswidth;
+            this.mycanvas.height = canvasheight;
+            this.lastwidth = canvaswidth;
+            this.lastheight = canvasheight;
+            need_redraw = true;
+            this.myctx = this.mycanvas.getContext("2d");
+        }
+        if (canvaswidth !== this.lastwidth || canvasheight !== this.lastheight) {
+            this.mycanvas.width = canvaswidth;
+            this.mycanvas.height = canvasheight;
+            if (this.mytex) {
+                glw.deleteTexture(this.mytex);
+                this.mytex = null;
+            }
+            need_redraw = true;
+        }
+        if (need_redraw) {
+            this.myctx.clearRect(0, 0, canvaswidth, canvasheight);
+            this.draw(this.myctx, true);
+            if (!this.mytex)
+                this.mytex = glw.createEmptyTexture(scaledwidth, scaledheight, this.runtime.linearSampling, this.runtime.isMobile);
+            glw.videoToTexture(this.mycanvas, this.mytex, this.runtime.isMobile);
+        }
+        this.lastwidth = canvaswidth;
+        this.lastheight = canvasheight;
+        glw.setTexture(this.mytex);
+        glw.setOpacity(this.opacity);
+        glw.resetModelView();
+        glw.translate(-halfw, -halfh);
+        glw.updateModelView();
+        var q = this.bquad;
+        var tlx = this.layer.layerToCanvas(q.tlx, q.tly, true, true);
+        var tly = this.layer.layerToCanvas(q.tlx, q.tly, false, true);
+        var trx = this.layer.layerToCanvas(q.trx, q.try_, true, true);
+        var try_ = this.layer.layerToCanvas(q.trx, q.try_, false, true);
+        var brx = this.layer.layerToCanvas(q.brx, q.bry, true, true);
+        var bry = this.layer.layerToCanvas(q.brx, q.bry, false, true);
+        var blx = this.layer.layerToCanvas(q.blx, q.bly, true, true);
+        var bly = this.layer.layerToCanvas(q.blx, q.bly, false, true);
+        if (this.runtime.pixel_rounding || (this.angle === 0 && layerAngle === 0)) {
+            var ox = ((tlx + 0.5) | 0) - tlx;
+            var oy = ((tly + 0.5) | 0) - tly
+            tlx += ox;
+            tly += oy;
+            trx += ox;
+            try_ += oy;
+            brx += ox;
+            bry += oy;
+            blx += ox;
+            bly += oy;
+        }
+        if (this.angle === 0 && layerAngle === 0) {
+            trx = tlx + scaledwidth;
+            try_ = tly;
+            brx = trx;
+            bry = tly + scaledheight;
+            blx = tlx;
+            bly = bry;
+            rcTex.right = 1;
+            rcTex.bottom = 1;
+        } else {
+            rcTex.right = floatscaledwidth / scaledwidth;
+            rcTex.bottom = floatscaledheight / scaledheight;
+        }
+        glw.quadTex(tlx, tly, trx, try_, brx, bry, blx, bly, rcTex);
+        glw.resetModelView();
+        glw.scale(layerScale, layerScale);
+        glw.rotateZ(-this.layer.getAngle());
+        glw.translate((this.layer.viewLeft + this.layer.viewRight) / -2, (this.layer.viewTop + this.layer.viewBottom) / -2);
+        glw.updateModelView();
+        this.last_render_tick = this.runtime.tickcount;
+    };
+    instanceProto.getWebglCtx = function () {
+        var inst = this;
+        var ctx = inst.myctx;
+        if (!ctx) {
+            inst.mycanvas = document.createElement("canvas");
+            var scaledwidth = Math.ceil(inst.layer.getScale() * inst.width);
+            var scaledheight = Math.ceil(inst.layer.getAngle() * inst.height);
+            inst.mycanvas.width = scaledwidth;
+            inst.mycanvas.height = scaledheight;
+            inst.lastwidth = scaledwidth;
+            inst.lastheight = scaledheight;
+            inst.myctx = inst.mycanvas.getContext("2d");
+            ctx = inst.myctx;
+        }
+        return ctx;
+    };
+    instanceProto.fakeRender = function () {
+        var inst = this;
+        var ctx = (this.runtime.enableWebGL) ?
+            this.getWebglCtx() : this.runtime.ctx;
+        inst.draw(ctx, null, true);
+    };
+    instanceProto.renderText = function (isRenderNow) {
+        if (isRenderNow) {
+            this.text_changed = true;
+            this.fakeRender();
+        }
+        this.text_changed = true;
+        this.runtime.redraw = true;
+    };
+    instanceProto.set_text = function (txt) {
+        txt = txt.replace(/<\s*br\s*\/>/g, "\n"); // replace "<br />" to "\n"
+        if (this.text !== txt) {
+            this.text = txt;
+            this.renderText(this.isForceRender);
+        }
+    };
+    instanceProto.LockCanvasSize = function (isLocked, width, height) {
+        this.isCanvasSizeLocked = isLocked;
+        this.lockedCanvasWidth = width;
+        this.lockedCanvasHeight = height;
+    };
+    var copyTable = function (inObj, outObj, isMerge) {
+        if (outObj == null)
+            outObj = {};
+        if (!isMerge) {
+            for (var k in outObj) {
+                if (!inObj.hasOwnProperty(k))
+                    delete outObj[k];
+            }
+        }
+        for (var k in inObj)
+            outObj[k] = inObj[k];
+        return outObj;
+    };
+    instanceProto.getRawText = function (text) {
+        return this.tagText.getRawText(text);
+    };
+    instanceProto.getSubText = function (start, end, text) {
+        return this.tagText.getSubText(start, end, text);
+    };
+    instanceProto.copyPensMgr = function (pensMgr) {
+        return this.tagText.copyPensMgr(pensMgr);
+    };
+    function Cnds() {};
+    pluginProto.cnds = new Cnds();
+    Cnds.prototype.CompareText = function (text_to_compare, case_sensitive) {
+        if (case_sensitive)
+            return this.text == text_to_compare;
+        else
+            return cr.equals_nocase(this.text, text_to_compare);
+    };
+    Cnds.prototype.DefineClass = function (name) {
+        this.tagInfo = {};
+        var current_frame = this.runtime.getCurrentEventStack();
+        var current_event = current_frame.current_event;
+        var solModifierAfterCnds = current_frame.isModifierAfterCnds();
+        if (solModifierAfterCnds)
+            this.runtime.pushCopySol(current_event.solModifiers);
+        current_event.retrigger();
+        if (solModifierAfterCnds)
+            this.runtime.popSol(current_event.solModifiers);
+        this.tagText.defineClass(name, this.tagInfo);
+        this.tagInfo = null;
+        return false;
+    };
+    function Acts() {};
+    pluginProto.acts = new Acts();
+    Acts.prototype.SetText = function (param) {
+        if (cr.is_number(param) && param < 1e9)
+            param = Math.round(param * 1e10) / 1e10; // round to nearest ten billionth - hides floating point errors
+        var text_to_set = param.toString();
+        this.set_text(text_to_set);
+    };
+    Acts.prototype.AppendText = function (param) {
+        if (cr.is_number(param))
+            param = Math.round(param * 1e10) / 1e10; // round to nearest ten billionth - hides floating point errors
+        var text_to_append = param.toString();
+        if (text_to_append.length > 0) // not empty
+            this.set_text(this.text + text_to_append);
+    };
+    Acts.prototype.SetFontFace = function (face_, style_) {
+        var newstyle = "";
+        switch (style_) {
+            case 1:
+                newstyle = "bold";
+                break;
+            case 2:
+                newstyle = "italic";
+                break;
+            case 3:
+                newstyle = "bold italic";
+                break;
+        }
+        if (this.tagInfo != null) // <class> ... </class>
+        {
+            this.tagInfo["font-family"] = face_;
+            this.tagInfo["font-style"] = newstyle;
+            this.renderText(false);
+        } else // global
+        {
+            if (face_ === this.facename && newstyle === this.fontstyle)
+                return; // no change
+            this.facename = face_;
+            this.fontstyle = newstyle;
+            this.updateFont();
+        }
+    };
+    Acts.prototype.SetFontSize = function (size_) {
+        if (this.tagInfo != null) // <class> ... </class>
+        {
+            this.tagInfo["font-size"] = size_.toString() + "pt";
+            this.renderText(false);
+        } else // global
+        {
+            if (this.ptSize === size_)
+                return;
+            this.ptSize = size_;
+            this.pxHeight = Math.ceil((this.ptSize / 72.0) * 96.0) + 4; // assume 96dpi...
+            this.updateFont();
+        }
+    };
+    Acts.prototype.SetFontColor = function (rgb) {
+        var newcolor;
+        if (typeof (rgb) == "number")
+            newcolor = "rgb(" + cr.GetRValue(rgb).toString() + "," + cr.GetGValue(rgb).toString() + "," + cr.GetBValue(rgb).toString() + ")";
+        else
+            newcolor = rgb;
+        if (this.tagInfo != null) // <class> ... </class>
+        {
+            this.tagInfo["color"] = newcolor;
+            this.renderText(false);
+        } else // global
+        {
+            if (newcolor === this.color)
+                return;
+            this.color = newcolor;
+            this.renderText(this.isForceRender);
+        }
+    };
+    Acts.prototype.SetWebFont = function (familyname_, cssurl_) {
+        if (this.runtime.isDomFree) {
+            cr.logexport("[Construct 2] TagText plugin: 'Set web font' not supported on this platform - the action has been ignored");
+            return; // DC todo
+        }
+        var self = this;
+        var refreshFunc = (function () {
+            self.runtime.redraw = true;
+            self.text_changed = true;
+        });
+        var newfacename = "'" + familyname_ + "'";
+        if (requestedWebFonts.hasOwnProperty(cssurl_)) {
+            if (this.tagInfo != null) // <class> ... </class>
+            {
+                this.tagInfo["font-family"] = newfacename;
+                this.renderText(false);
+            } else // global
+            {
+                if (this.facename === newfacename)
+                    return; // no change
+                this.facename = newfacename;
+                this.updateFont();
+            }
+            for (var i = 1; i < 10; i++) {
+                setTimeout(refreshFunc, i * 100);
+                setTimeout(refreshFunc, i * 1000);
+            }
+            return;
+        }
+        var wf = document.createElement("link");
+        wf.href = cssurl_;
+        wf.rel = "stylesheet";
+        wf.type = "text/css";
+        wf.onload = refreshFunc;
+        document.getElementsByTagName('head')[0].appendChild(wf);
+        requestedWebFonts[cssurl_] = true;
+        if (this.tagInfo != null) // <class> ... </class>
+        {
+            this.tagInfo["font-family"] = newfacename;
+            this.renderText(false);
+        } else {
+            this.facename = "'" + familyname_ + "'";
+            this.updateFont();
+        }
+        for (var i = 1; i < 10; i++) {
+            setTimeout(refreshFunc, i * 100);
+            setTimeout(refreshFunc, i * 1000);
+        }
+;
+    };
+    Acts.prototype.SetEffect = function (effect) {
+        this.compositeOp = cr.effectToCompositeOp(effect);
+        cr.setGLBlend(this, effect, this.runtime.gl);
+        this.renderText(this.isForceRender);
+    };
+    Acts.prototype.SetFontStyle = function (style_) {
+        var newstyle = "";
+        switch (style_) {
+            case 1:
+                newstyle = "bold";
+                break;
+            case 2:
+                newstyle = "italic";
+                break;
+            case 3:
+                newstyle = "bold italic";
+                break;
+        }
+        if (this.tagInfo != null) // <class> ... </class>
+        {
+            this.tagInfo["font-style"] = newstyle;
+            this.renderText(false);
+        } else // global
+        {
+            if (newstyle === this.fontstyle)
+                return; // no change
+            this.fontstyle = newstyle;
+            this.updateFont();
+        }
+    };
+    Acts.prototype.SetFontFace2 = function (face_) {
+        if (this.tagInfo != null) // <class> ... </class>
+        {
+            this.tagInfo["font-family"] = face_;
+            this.renderText(false);
+        } else // global
+        {
+            if (face_ === this.facename)
+                return; // no change
+            this.facename = face_;
+            this.updateFont();
+        }
+    };
+    Acts.prototype.SetLineHeight = function (lineHeightOffset) {
+        if (this.lineHeightOffset === lineHeightOffset)
+            return;
+        this.lineHeightOffset = lineHeightOffset;
+        this.renderText(this.isForceRender);
+    };
+    Acts.prototype.SetHorizontalAlignment = function (align) {
+        if (this.halign === align)
+            return;
+        this.halign = align; // 0=left, 1=center, 2=right
+        this.renderText(this.isForceRender);
+    };
+    Acts.prototype.SetVerticalAlignment = function (align) {
+        if (this.valign === align)
+            return;
+        this.valign = align; // 0=top, 1=center, 2=bottom
+        this.renderText(this.isForceRender);
+    };
+    Acts.prototype.SetWrapping = function (wrap_mode) {
+        wrap_mode = (wrap_mode === 0); // 0=word, 1=character
+        if (this.wrapbyword === wrap_mode)
+            return;
+        this.wrapbyword = wrap_mode;
+        this.renderText(this.isForceRender);
+    };
+    Acts.prototype.SetCustomProperty = function (name_, value_) {
+        if (!this.tagInfo)
+            return;
+        this.tagInfo[name_] = value_;
+    };
+    Acts.prototype.SetShadow = function (offsetX, offsetY, blur_, color_) {
+        color_ = color_.replace(/ /g, '');
+        var shadow = offsetX.toString() + "px " + offsetY.toString() + "px " + blur_.toString() + "px " + color_;
+        if (this.tagInfo != null) // <class> ... </class>
+        {
+            this.tagInfo["text-shadow"] = shadow
+            this.renderText(false);
+        } else // global
+        {
+            this.textShadow = shadow;
+            this.renderText(this.isForceRender);
+        }
+    };
+    Acts.prototype.AddCSSTags = function (css_) {
+        var cssRegex = new RegExp('([\\s\\S]*?){([\\s\\S]*?)}', 'gi');
+        var commentsRegex;
+        var isRenderNow = false;
+        var arr;
+        var tagName, comments;
+        var props, rules, i, cnt, elems, n, v;
+        while (true) {
+            arr = cssRegex.exec(css_);
+            if (arr === null)
+                break;
+            tagName = arr[1].split('\r\n').join('\n').trim();
+            commentsRegex = new RegExp(this.cssCommentsRegex, 'gi');
+            comments = commentsRegex.exec(tagName);
+            if (comments !== null) {
+                tagName = tagName.replace(commentsRegex, '').trim();
+            }
+            tagName = tagName.replace(/\n+/, "\n");
+            props = {};
+            rules = arr[2].split('\r\n').join('\n').split(';');
+            cnt = rules.length;
+            for (i = 0; i < cnt; i++) {
+                if (rules[i].indexOf(":") === (-1))
+                    continue;
+                elems = rules[i].trim().split(':');
+                n = elems[0].trim().toLowerCase();
+                v = elems[1].trim();
+                props[n] = v;
+            }
+            this.tagText.defineClass(tagName, props);
+            isRenderNow = true;
+        }
+        if (isRenderNow)
+            this.renderText(this.isForceRender);
+    };
+    Acts.prototype.SetUnderline = function (color_, thinkness, offset) {
+        color_ = color_.replace(/ /g, '');
+        var underline = color_ + " " + thinkness.toString() + "px " + offset.toString() + "px";
+        if (this.tagInfo != null) // <class> ... </class>
+        {
+            this.tagInfo["underline"] = underline;
+            this.renderText(false);
+        }
+    };
+    Acts.prototype.SetStroke = function (color_, lineWidth, lineJoin) {
+        color_ = color_.replace(/ /g, '');
+        lineJoin = lineJoinMode[lineJoin];
+        var stroke = color_ + " " + lineWidth.toString() + "px " + lineJoin;
+        if (this.tagInfo != null) // <class> ... </class>
+        {
+            this.tagInfo["stroke"] = stroke;
+            this.renderText(false);
+        } else // global
+        {
+            if (stroke === this.stroke)
+                return;
+            this.stroke = stroke;
+            this.renderText(this.isForceRender);
+        }
+    };
+    Acts.prototype.InsertImage = function (key) {
+        if (this.tagInfo != null) // <class> ... </class>
+        {
+            this.tagInfo["image"] = key;
+            this.renderText(false);
+        }
+    };
+    Acts.prototype.AddImage = function (key, objs, yoffset) {
+        if (!objs)
+            return;
+        window.RexImageBank.AddImage(key, objs.getFirstPicked(), yoffset);
+        this.renderText(this.isForceRender);
+    };
+    Acts.prototype.RemoveImage = function (key) {
+        window.RexImageBank.RemoveImage(key);
+        this.renderText(this.isForceRender);
+    };
+    Acts.prototype.RemoveAll = function () {
+        window.RexImageBank.RemoveAll();
+        this.renderText(this.isForceRender);
+    };
+    Acts.prototype.SetBackgroundColor = function (color) {
+        if (color === this.tagText.backgroundColor)
+            return;
+        this.tagText.backgroundColor = color;
+        this.need_text_redraw = true;
+        this.runtime.redraw = true;
+    };
+    function Exps() {};
+    pluginProto.exps = new Exps();
+    Exps.prototype.Text = function (ret, start, end) {
+        var txt;
+        if ((start == null) && (end == null))
+            txt = this.text;
+        else
+            txt = this.getSubText(start, end);
+        ret.set_string(txt);
+    };
+    Exps.prototype.FaceName = function (ret) {
+        ret.set_string(this.facename);
+    };
+    Exps.prototype.FaceSize = function (ret) {
+        ret.set_int(this.ptSize);
+    };
+    Exps.prototype.TextWidth = function (ret) {
+        ret.set_int(this.tagText.getTextWidth());
+    };
+    Exps.prototype.TextHeight = function (ret) {
+        var total_line_count = this.tagText.getLines().length;
+        var text_height = total_line_count * (this.pxHeight + this.lineHeightOffset) - this.lineHeightOffset;
+        if (this.baseLineMode === 0) // alphabetic
+            text_height += this.vshift;
+        ret.set_float(text_height);
+    };
+    Exps.prototype.RawText = function (ret) {
+        ret.set_string(this.tagText.getRawText());
+    };
+    Exps.prototype.LastClassPropValue = function (ret, name, default_value) {
+        var val;
+        var lastPen = this.tagText.getLastPen();
+        if (lastPen)
+            val = lastPen.prop[name];
+        if (!val)
+            val = default_value || 0;
+        ret.set_any(val);
+    };
+    var ObjCacheKlass = function () {
+        this.lines = [];
+    };
+    var ObjCacheKlassProto = ObjCacheKlass.prototype;
+    ObjCacheKlassProto.allocLine = function () {
+        return (this.lines.length > 0) ? this.lines.pop() : null;
+    };
+    ObjCacheKlassProto.freeLine = function (l) {
+        this.lines.push(l);
+    };
+    ObjCacheKlassProto.freeAllLines = function (arr) {
+        var i, len;
+        for (i = 0, len = arr.length; i < len; i++)
+            this.freeLine(arr[i]);
+        arr.length = 0;
+    };
+    var CanvasText = function () {
+        this.canvas = null;
+        this.context = null;
+        this.savedClasses = {}; // class define
+        this.textInfo = {
+            "text": "",
+            "x": 0,
+            "y": 0,
+            "boxWidth": 0,
+            "boxHeight": 0,
+            "ignore": null,
+        };
+        this.pensMgr = new PensMgrKlass();
+        this.text_changed = true; // update this.pens to redraw
+        /*
+         * Default values, overwrite before draw by plugin
+         */
+        this.defaultProperties = {
+            family: "Verdana",
+            weight: "",
+            ptSize: "12pt",
+            color: "#000000",
+            stroke: ["none", 1],
+            style: "normal",
+            shadow: "",
+        };
+        this.underline = {
+            thickness: 1,
+            offset: 0
+        };
+        this.textAlign = "start";
+        this.lineHeight = "16";
+        this.textBaseline = "alphabetic";
+        this.backgroundColor = "";
+    };
+    var CanvasTextProto = CanvasText.prototype;
+    CanvasTextProto.Reset = function (plugin) {
+        this.plugin = plugin;
+    };
+    CanvasTextProto.getLines = function () {
+        return this.pensMgr.getLines();
+    };
+    CanvasTextProto.get_propScope = function (propIn) {
+        var propScope = {};
+        if (propIn != null) {
+            /*
+             * Loop the class properties.
+             */
+            var atribute;
+            for (atribute in propIn) {
+                switch (atribute) {
+                    case "font":
+                        propScope["font"] = propIn[atribute];
+                        break;
+                    case "font-family":
+                        propScope["family"] = propIn[atribute];
+                        break;
+                    case "font-weight":
+                        propScope["weight"] = propIn[atribute];
+                        break;
+                    case "font-size":
+                        propScope["size"] = propIn[atribute];
+                        break;
+                    case "color":
+                        propScope["color"] = propIn[atribute];
+                        break;
+                    case "stroke":
+                        propScope["stroke"] = propIn[atribute];
+                        break;
+                    case "font-style":
+                        propScope["style"] = propIn[atribute];
+                        break;
+                    case "text-shadow":
+                        propScope["shadow"] = propIn[atribute];
+                        break;
+                    case "underline":
+                        propScope["u"] = propIn[atribute];
+                        break;
+                    case "image":
+                        propScope["img"] = propIn[atribute];
+                        break;
+                    default:
+                        propScope[atribute] = propIn[atribute];
+                        break;
+                }
+            }
+        }
+        return propScope;
+    };
+    CanvasTextProto.applyPropScope = function (propScope) {
+        if (this.isTextMode(propScope)) {
+            var font = propScope["font"];
+            if (font) {
+                this.context.font = font;
+            } else {
+                var style = propScope["style"] || this.defaultProperties.style;
+                var weight = propScope["weight"] || this.defaultProperties.weight;
+                var ptSize = this.getTextSize(propScope);
+                var family = propScope["family"] || this.defaultProperties.family;
+                this.context.font = style + " " + weight + " " + ptSize + " " + family;
+            }
+            var color = this.getFillColor(propScope);
+            if (color.toLowerCase() !== "none")
+                this.context.fillStyle = color;
+            var stroke = this.getStroke(propScope);
+            if (stroke.toLowerCase() !== "none") {
+                stroke = stroke.split(" ");
+                this.context.strokeStyle = stroke[0];
+                if (stroke[1] != null) this.context.lineWidth = parseFloat(stroke[1].replace("px", ""));
+                if (stroke[2] != null) {
+                    this.context.lineJoin = stroke[2];
+                    this.context.miterLimit = 2;
+                }
+            }
+        }
+        var shadow = (propScope["shadow"]) ? propScope["shadow"] : this.defaultProperties.shadow;
+        if (shadow !== "") {
+            shadow = shadow.split(" ");
+            this.context.shadowOffsetX = parseFloat(shadow[0].replace("px", ""));
+            this.context.shadowOffsetY = parseFloat(shadow[1].replace("px", ""));
+            this.context.shadowBlur = parseFloat(shadow[2].replace("px", ""));
+            this.context.shadowColor = shadow[3];
+        }
+    };
+    CanvasTextProto.isTextMode = function (propScope) {
+        var isImageMode = propScope.hasOwnProperty("img");
+        return !isImageMode;
+    };
+    CanvasTextProto.getTextSize = function (propScope) {
+        var size;
+        if (propScope.hasOwnProperty("size"))
+            size = propScope["size"];
+        else
+            size = this.defaultProperties.ptSize;
+        return size;
+    };
+    CanvasTextProto.getFillColor = function (propScope) {
+        var color;
+        if (propScope.hasOwnProperty("color"))
+            color = propScope["color"];
+        else
+            color = this.defaultProperties.color;
+        return color;
+    };
+    CanvasTextProto.getStroke = function (propScope) {
+        var stroke;
+        if (propScope.hasOwnProperty("stroke"))
+            stroke = propScope["stroke"];
+        else
+            stroke = this.defaultProperties.stroke;
+        return stroke;
+    };
+    CanvasTextProto.drawPen = function (pen, offsetX, offsetY) {
+        var ctx = this.context;
+        ctx.save();
+        this.applyPropScope(pen.prop);
+        var startX = offsetX + pen.x;
+        var startY = offsetY + pen.y;
+        var underline = pen.prop["u"];
+        if (underline) {
+            underline = underline.split(" ");
+            var color = underline[0];
+            var thicknessSave = this.underline.thickness;
+            if (underline[1] != null) this.underline.thickness = parseFloat(underline[1].replace("px", ""));
+            var offsetSave = this.underline.offset;
+            if (underline[2] != null) this.underline.offset = parseFloat(underline[2].replace("px", ""));
+            this.drawUnderline(pen.text, startX, startY,
+                this.getTextSize(pen.prop),
+                color);
+            this.underline.thickness = thicknessSave;
+            this.underline.offset = offsetSave;
+        }
+        if (pen.prop.hasOwnProperty("img")) {
+            var img = window.RexImageBank.GetImage(pen.prop["img"]);
+            if (img) {
+                var y = startY + img.yoffset;
+                if (this.textBaseline == "alphabetic") {
+                    y -= this.lineHeight;
+                }
+                ctx.drawImage(img.img, startX, y, img.width, img.height);
+            }
+        }
+        else {
+            if (this.getStroke(pen.prop).toLowerCase() !== "none")
+                ctx.strokeText(pen.text, startX, startY);
+            if (this.getFillColor(pen.prop).toLowerCase() !== "none")
+                ctx.fillText(pen.text, startX, startY);
+        }
+        ctx.restore();
+    };
+    CanvasTextProto.drawUnderline = function (text, x, y, size, color) {
+        var ctx = this.context;
+        var width = ctx.measureText(text).width;
+        y += this.underline.offset;
+        if (this.textBaseline === "top")
+            y += parseInt(size);
+        ctx.beginPath();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = this.underline.thickness;
+        ctx.moveTo(x, y);
+        ctx.lineTo(x + width, y);
+        ctx.stroke();
+    };
+    CanvasTextProto.preProcess = function () {
+        if (this.backgroundColor !== "") {
+            var ctx = this.context;
+            ctx.fillStyle = this.backgroundColor;
+            ctx.fillRect(0, 0, this.textInfo["boxWidth"], this.textInfo["boxHeight"]);
+        }
+    };
+    CanvasTextProto.drawPens = function (pensMgr, textInfo) {
+        var boxWidth = textInfo["boxWidth"],
+            boxHeight = textInfo["boxHeight"];
+        var startX = textInfo["x"],
+            startY = textInfo["y"];
+        var lines = pensMgr.getLines(),
+            lcnt = lines.length;
+        var offsetX, offsetY;
+        if (this.plugin.valign === 1) // center
+            offsetY = Math.max((boxHeight - (lcnt * this.lineHeight)) / 2, 0);
+        else if (this.plugin.valign === 2) // bottom
+            offsetY = Math.max(boxHeight - (lcnt * this.lineHeight) - 2, 0);
+        else
+            offsetY = 0;
+        offsetY += startY;
+        if (this.textBaseline == "alphabetic")
+            offsetY += (this.plugin.vshift * this.plugin.runtime.devicePixelRatio); // shift line down
+        var li, lineWidth;
+        var pi, pcnt, pens, pen;
+        for (li = 0; li < lcnt; li++) {
+            lineWidth = pensMgr.getLineWidth(li);
+            if (lineWidth === 0)
+                continue;
+            if (this.plugin.halign === 1) // center
+                offsetX = (boxWidth - lineWidth) / 2;
+            else if (this.plugin.halign === 2) // right
+                offsetX = boxWidth - lineWidth;
+            else
+                offsetX = 0;
+            offsetX += startX;
+            pens = lines[li];
+            pcnt = pens.length;
+            for (pi = 0; pi < pcnt; pi++) {
+                pen = pens[pi];
+                if (pen.text === "")
+                    continue;
+                this.drawPen(pen, offsetX, offsetY);
+            }
+        }
+    };
+    CanvasTextProto.postProcess = function () {
+    };
+    var __re_class_header = /<\s*class=/i;
+    var __re_class = /<\s*class=["|']([^"|']+)["|']\s*\>([\s\S]*?)<\s*\/class\s*\>/;
+    var __re_style_header = /<\s*style=/i;
+    var __re_style = /<\s*style=["|']([^"|']+)["|']\s*\>([\s\S]*?)<\s*\/style\s*\>/;
+    var RAWTEXTONLY_MODE = 1;
+    var __result = [];
+    var splitText = function (txt, mode) {
+        var re = /<\s*class=["|']([^"|']+)["|']\s*\>([\s\S]*?)<\s*\/class\s*\>|<\s*style=["|']([^"|']+)["|']\s*\>([\s\S]*?)<\s*\/style\s*\>/g;
+        __result.length = 0;
+        var arr, m, charIdx = 0,
+            totalLen = txt.length,
+            matchStart = totalLen;
+        var innerMatch;
+        while (true) {
+            arr = re.exec(txt);
+            if (!arr) {
+                break;
+            }
+            m = arr[0];
+            matchStart = re["lastIndex"] - m.length;
+            if (charIdx < matchStart) {
+                __result.push(txt.substring(charIdx, matchStart));
+            }
+            if (mode == null) {
+                __result.push(m);
+            } else if (mode === RAWTEXTONLY_MODE) {
+                if (__re_class_header.test(m)) {
+                    innerMatch = m.match(__re_class);
+                    __result.push(innerMatch[2]);
+                } else if (__re_style_header.test(m)) {
+                    innerMatch = m.match(__re_style);
+                    __result.push(innerMatch[2]);
+                }
+            }
+            charIdx = re["lastIndex"];
+        }
+        if (charIdx < totalLen) {
+            __result.push(txt.substring(charIdx, totalLen));
+        }
+        return __result;
+    };
+    var style2Prop = function (s) {
+        s = s.split(";");
+        var i, cnt = s.length;
+        var result = {},
+            prop, k, v;
+        for (i = 0; i < cnt; i++) {
+            prop = s[i].split(":");
+            k = prop[0], v = prop[1];
+            if (isEmpty(k) || isEmpty(v)) {
+                continue;
+            }
+            result[k] = v;
+        }
+        return result;
+    };
+    CanvasTextProto.updatePens = function (pensMgr, textInfo, ignore_wrap) {
+        if (textInfo == null)
+            textInfo = this.textInfo;
+        pensMgr.freePens();
+        var text = textInfo["text"],
+            boxWidth = textInfo["boxWidth"],
+            boxHeight = textInfo["boxHeight"];
+        if (text === "")
+            return;
+        var startX = 0,
+            startY = 0;
+        var cursorX = startX,
+            cursorY = startY;
+        var currentPropScope, proText;
+        var m, match = splitText(text);
+        if (match.length === 0)
+            return;
+        var i, match_cnt = match.length;
+        var innerMatch = null;
+        for (i = 0; i < match_cnt; i++) {
+            m = match[i];
+            proText = null;
+            if (__re_class_header.test(m)) {
+                innerMatch = m.match(__re_class);
+                if (innerMatch != null) {
+                    currentPropScope = this.get_propScope(this.getClass(innerMatch[1]));
+                    currentPropScope["class"] = innerMatch[1];
+                    proText = innerMatch[2];
+                }
+            } else if (__re_style_header.test(m)) {
+                innerMatch = m.match(__re_style);
+                if (innerMatch != null) {
+                    currentPropScope = this.get_propScope(style2Prop(innerMatch[1]));
+                    proText = innerMatch[2];
+                }
+            }
+            if (proText === null) {
+                proText = m;
+                currentPropScope = {};
+            }
+            if (currentPropScope.hasOwnProperty("img")) {
+                var img = window.RexImageBank.GetImage(currentPropScope["img"]);
+                if (!img)
+                    continue;
+                if (!ignore_wrap) {
+                    if (img.width > boxWidth - (cursorX - startX)) {
+                        cursorX = startX;
+                        cursorY += this.lineHeight;
+                    }
+                    pensMgr.addPen(null, // text
+                        cursorX, // x
+                        cursorY, // y
+                        img.width, // width
+                        currentPropScope, // prop
+                        0 // newLineMode
+                    );
+                    cursorX += img.width;
+                } else {
+                    pensMgr.addPen(null, // text
+                        null, // x
+                        null, // y
+                        null, // width
+                        currentPropScope, // prop
+                        0 // newLineMode
+                    );
+                }
+            }
+            else {
+                if (!ignore_wrap) {
+                    this.context.save();
+                    this.applyPropScope(currentPropScope);
+                    var wrap_lines = wordWrap(proText, this.context, boxWidth, this.plugin.wrapbyword, cursorX - startX);
+                    var lcnt = wrap_lines.length,
+                        n, wrap_line;
+                    for (n = 0; n < lcnt; n++) {
+                        wrap_line = wrap_lines[n];
+                        pensMgr.addPen(wrap_line.text, // text
+                            cursorX, // x
+                            cursorY, // y
+                            wrap_line.width, // width
+                            currentPropScope, // prop
+                            wrap_line.newLineMode // newLineMode
+                        );
+                        if (wrap_line.newLineMode !== NO_NEWLINE) {
+                            cursorX = startX;
+                            cursorY += this.lineHeight;
+                        } else {
+                            cursorX += wrap_line.width;
+                        }
+                    }
+                    this.context.restore();
+                } else {
+                    pensMgr.addPen(proText, // text
+                        null, // x
+                        null, // y
+                        null, // width
+                        currentPropScope, // prop
+                        0 // newLineMode
+                    );
+                }
+            }
+        } // for (i = 0; i < match_cnt; i++)
+    };
+    CanvasTextProto.drawText = function () {
+        var textInfo = this.textInfo;
+        if (this.text_changed) {
+            this.updatePens(this.pensMgr, textInfo);
+            this.text_changed = false;
+        }
+        if (!textInfo["ignore"]) {
+            this.context.textBaseline = this.textBaseline;
+            this.context.textAlign = this.textAlign;
+            this.preProcess();
+            this.drawPens(this.pensMgr, textInfo);
+            this.postProcess();
+        }
+    };
+    var __tempPensMgr = null;
+    CanvasTextProto.getSubText = function (start, end, text) {
+        if (text == null)
+            return this.pensMgr.getSliceTagText(start, end);
+        if (__tempPensMgr === null)
+            __tempPensMgr = new PensMgrKlass();
+        var textSave = this.textInfo["text"];
+        this.textInfo["text"] = text;
+        this.updatePens(__tempPensMgr, this.textInfo, true);
+        this.textInfo["text"] = textSave;
+        return __tempPensMgr.getSliceTagText(start, end);
+    };
+    CanvasTextProto.getRawText = function (text) {
+        if (text == null)
+            return this.pensMgr.getRawText();
+        var m, match = splitText(text, RAWTEXTONLY_MODE);
+        if (match.length === 0)
+            return "";
+        var i, match_cnt = match.length;
+        var innerMatch, rawTxt = "";
+        for (i = 0; i < match_cnt; i++) {
+            rawTxt += match[i];
+        } // for (i = 0; i < match_cnt; i++)
+        return rawTxt;
+    };
+    CanvasTextProto.copyPensMgr = function (pensMgr) {
+        return this.pensMgr.copy(pensMgr);
     }
-	instanceProto.IsMouseMode = function ()
-	{
-		return this._is_mouse_mode;
-	};
-	instanceProto.IsInTouch = function ()
-	{
-		return (this._is_mouse_mode)? this.mouseDown : this.touches.length;
-	};
+    CanvasTextProto.getTextWidth = function (pensMgr) {
+        if (pensMgr == null)
+            pensMgr = this.pensMgr;
+        return pensMgr.getMaxLineWidth();
+    };
+    CanvasTextProto.getLastPen = function (pensMgr) {
+        if (pensMgr == null)
+            pensMgr = this.pensMgr;
+        return pensMgr.getLastPen();
+    };
+    /**
+     * Save a new class definition.
+     */
+    CanvasTextProto.defineClass = function (id, definition) {
+        this.savedClasses[id] = definition;
+        return true;
+    };
+    /**
+     * Returns a saved class.
+     */
+    CanvasTextProto.getClass = function (id) {
+        return this.savedClasses[id];
+    };
+    /**
+     * A simple function to check if the given value is empty.
+     */
+    var isEmpty = function (str) {
+        str = str.replace(/^\s+|\s+$/, '');
+        return str.length == 0;
+    };
+    /**
+     * A simple function clear whitespaces.
+     */
+    CanvasTextProto.trim = function (str) {
+        var ws, i;
+        str = str.replace(/^\s\s*/, '');
+        ws = /\s/;
+        i = str.length;
+        while (ws.test(str.charAt(--i))) {
+            continue;
+        }
+        return str.slice(0, i + 1);
+    };
+    CanvasTextProto.saveToJSON = function () {
+        return {
+            "cls": this.savedClasses,
+            "bgc": this.backgroundColor
+        };
+    };
+    CanvasTextProto.loadFromJSON = function (o) {
+        this.savedClasses = o["cls"];
+        this.backgroundColor = o["bgc"];
+    };
+    var NO_NEWLINE = 0;
+    var RAW_NEWLINE = 1;
+    var WRAPPED_NEWLINE = 2;
+    var lineCache = new ObjCacheKlass();
+    lineCache.newline = function (text, width, newLineMode) {
+        var l = this.allocLine() || {};
+        l.text = text;
+        l.width = width;
+        l.newLineMode = newLineMode; // 0= no new line, 1=raw "\n", 2=wrapped "\n"
+        return l;
+    };
+    var __wrappedLines = [];
+    var wordWrap = function (text, ctx, width, wrapbyword, offsetX) {
+        var lines = __wrappedLines;
+        lineCache.freeAllLines(lines);
+        if (!text || !text.length) {
+            return lines;
+        }
+        if (width <= 2.0) {
+            return lines;
+        }
+        if (text.length <= 100 && text.indexOf("\n") === -1) {
+            var all_width = ctx.measureText(text).width;
+            if (all_width <= (width - offsetX)) {
+                lineCache.freeAllLines(lines);
+                lines.push(lineCache.newline(text, all_width, NO_NEWLINE));
+                return lines;
+            }
+        }
+        return WrapText(text, lines, ctx, width, wrapbyword, offsetX);
+    };
+    var WrapText = function (text, lines, ctx, width, wrapbyword, offsetX) {
+        var wordArray = (wrapbyword) ? TokeniseWords(text) : text;
+        var cur_line = "";
+        var prev_line;
+        var lineWidth;
+        var i, wcnt = wordArray.length;
+        var lineIndex = 0;
+        var line;
+        for (i = 0; i < wcnt; i++) {
+            if (wordArray[i] === "\n") {
+                if (lineIndex >= lines.length)
+                    lines.push(lineCache.newline(cur_line, ctx.measureText(cur_line).width, RAW_NEWLINE));
+                lineIndex++;
+                cur_line = "";
+                offsetX = 0;
+                continue;
+            }
+            prev_line = cur_line;
+            cur_line += wordArray[i];
+            lineWidth = ctx.measureText(cur_line).width;
+            if (lineWidth >= (width - offsetX)) {
+                if (lineIndex >= lines.length)
+                    lines.push(lineCache.newline(prev_line, ctx.measureText(prev_line).width, WRAPPED_NEWLINE));
+                lineIndex++;
+                cur_line = wordArray[i];
+                if (!wrapbyword && cur_line === " ")
+                    cur_line = "";
+                offsetX = 0;
+            }
+        }
+        if (cur_line.length) {
+            if (lineIndex >= lines.length)
+                lines.push(lineCache.newline(cur_line, ctx.measureText(cur_line).width, NO_NEWLINE));
+            lineIndex++;
+        }
+        for (i = lineIndex; i < lines.length; i++)
+            lineCache.freeLine(lines[i]);
+        lines.length = lineIndex;
+        return lines;
+    };
+    var __wordsCache = [];
+    var TokeniseWords = function (text) {
+        __wordsCache.length = 0;
+        var cur_word = "";
+        var ch;
+        var i = 0;
+        while (i < text.length) {
+            ch = text.charAt(i);
+            if (ch === "\n") {
+                if (cur_word.length) {
+                    __wordsCache.push(cur_word);
+                    cur_word = "";
+                }
+                __wordsCache.push("\n");
+                ++i;
+            }
+            else if (ch === " " || ch === "\t" || ch === "-") {
+                do {
+                    cur_word += text.charAt(i);
+                    i++;
+                }
+                while (i < text.length && (text.charAt(i) === " " || text.charAt(i) === "\t"));
+                __wordsCache.push(cur_word);
+                cur_word = "";
+            } else if (i < text.length) {
+                cur_word += ch;
+                i++;
+            }
+        }
+        if (cur_word.length)
+            __wordsCache.push(cur_word);
+        return __wordsCache;
+    };
+    var __penMgr_penCache = new ObjCacheKlass();
+    var __penMgr_lineCache = new ObjCacheKlass();
+    var PensMgrKlass = function () {
+        this.pens = []; // all pens
+        this.lines = []; // pens in lines [ [],[],[],.. ]
+    };
+    var PensMgrKlassProto = PensMgrKlass.prototype;
+    PensMgrKlassProto.freePens = function () {
+        var li, lcnt = this.lines.length;
+        for (li = 0; li < lcnt; li++)
+            this.lines[li].length = 0; // unlink pens
+        __penMgr_penCache.freeAllLines(this.pens);
+        __penMgr_lineCache.freeAllLines(this.lines);
+    };
+    PensMgrKlassProto.addPen = function (txt, x, y, width, prop, newLineMode) {
+        var pen = __penMgr_penCache.allocLine();
+        if (pen === null) {
+            pen = new PenKlass();
+        }
+        pen.setPen(txt, x, y, width, prop, newLineMode);
+        var previousPen = this.pens[this.pens.length - 1];
+        if (previousPen == null)
+            pen.startIndex = 0;
+        else
+            pen.startIndex = previousPen.getNextStartIndex();
+        this.pens.push(pen);
+        var line = this.lines[this.lines.length - 1];
+        if (line == null) {
+            line = __penMgr_lineCache.allocLine() || [];
+            this.lines.push(line);
+        }
+        line.push(pen);
+        if (newLineMode !== NO_NEWLINE) {
+            line = __penMgr_lineCache.allocLine() || [];
+            this.lines.push(line);
+        }
+    };
+    PensMgrKlassProto.getPens = function () {
+        return this.pens;
+    };
+    PensMgrKlassProto.getLastPen = function () {
+        return this.pens[this.pens.length - 1];
+    };
+    PensMgrKlassProto.getLines = function () {
+        return this.lines;
+    };
+    PensMgrKlassProto.getLineStartChartIndex = function (i) {
+        var line = this.lines[i];
+        if (line == null)
+            return 0;
+        return line[0].startIndex;
+    };
+    PensMgrKlassProto.getLineEndChartIndex = function (i) {
+        var li, hasLastPen = false,
+            line;
+        for (li = i; li >= 0; li--) {
+            line = this.lines[li];
+            hasLastPen = (line != null) && (line.length > 0);
+            if (hasLastPen)
+                break;
+        }
+        if (!hasLastPen)
+            return 0;
+        var lastPen = line[line.length - 1];
+        return lastPen.getEndIndex();
+    };
+    PensMgrKlassProto.copy = function (targetPensMgr) {
+        if (targetPensMgr == null)
+            targetPensMgr = new PensMgrKlass();
+        targetPensMgr.freePens();
+        var li, lcnt = this.lines.length;
+        var pens, pi, pcnt, pen;
+        for (li = 0; li < lcnt; li++) {
+            pens = this.lines[li];
+            pcnt = pens.length;
+            for (pi = 0; pi < pcnt; pi++) {
+                pen = pens[pi];
+                targetPensMgr.addPen(pen.text,
+                    pen.x,
+                    pen.y,
+                    pen.width,
+                    pen.prop,
+                    pen.newLineMode);
+            }
+        }
+        return targetPensMgr;
+    };
+    PensMgrKlassProto.getLineWidth = function (i) {
+        var line = this.lines[i];
+        if (!line)
+            return 0;
+        var lastPen = line[line.length - 1];
+        if (!lastPen)
+            return 0;
+        var firstPen = line[0];
+        var lineWidth = lastPen.getLastX(); // start from 0
+        return lineWidth;
+    };
+    PensMgrKlassProto.getMaxLineWidth = function () {
+        var w, maxW = 0,
+            i, cnt = this.lines.length,
+            line, lastPen;
+        for (i = 0; i < cnt; i++) {
+            w = this.getLineWidth(i);
+            if (w > maxW)
+                maxW = w;
+        }
+        return maxW;
+    };
+    PensMgrKlassProto.getRawText = function () {
+        var txt = "",
+            i, cnt = this.pens.length,
+            pen;
+        for (i = 0; i < cnt; i++)
+            txt += this.pens[i].getRawText();
+        return txt;
+    };
+    PensMgrKlassProto.getRawTextLength = function () {
+        var l = 0,
+            i, cnt = this.pens.length,
+            pen;
+        for (i = 0; i < cnt; i++)
+            l += this.pens[i].getRawText().length;
+        return l;
+    };
+    PensMgrKlassProto.getSliceTagText = function (start, end) {
+        if (start == null)
+            start = 0;
+        if (end == null) {
+            var lastPen = this.getLastPen();
+            if (lastPen == null)
+                return "";
+            end = lastPen.getEndIndex();
+        }
+        var txt = "",
+            i, cnt = this.pens.length,
+            pen, pen_txt, pen_si, pen_ei, in_range;
+        for (i = 0; i < cnt; i++) {
+            pen = this.pens[i];
+            pen_txt = pen.getRawText();
+            pen_si = pen.startIndex;
+            pen_ei = pen.getNextStartIndex();
+            if (pen_ei < start)
+                continue;
+            in_range = (pen_si >= start) && (pen_ei < end);
+            if (!in_range) {
+                pen_txt = pen_txt.substring(start - pen_si, end - pen_si);
+            }
+            txt += prop2TagText(pen_txt, pen.prop);
+            if (pen_ei >= end)
+                break;
+        }
+        return txt;
+    };
+    var __propList = [];
+    var prop2TagText = function (txt, prop) {
+        if (prop["class"]) // class mode
+            txt = "<class='" + prop["class"] + "'>" + txt + "</class>";
+        else // style mode
+        {
+            __propList.length = 0;
+            for (var k in prop) {
+                __propList.push(k + ":" + prop[k]);
+            }
+            if (__propList.length > 0)
+                txt = "<style='" + __propList.join(";") + "'>" + txt + "</style>";
+        }
+        return txt;
+    };
+    var PenKlass = function () {
+        this.text = null;
+        this.x = null;
+        this.y = null;
+        this.width = null;
+        this.prop = {};
+        this.newLineMode = null;
+        this.startIndex = null;
+    }
+    var PenKlassProto = PenKlass.prototype;
+    PenKlassProto.setPen = function (txt, x, y, width, prop, newLineMode, start_index) {
+        this.text = txt;
+        this.x = x;
+        this.y = y;
+        this.width = width;
+        copyTable(prop, this.prop); // font, size, color, shadow, etc...
+        this.newLineMode = newLineMode; // 0= no new line, 1=raw "\n", 2=wrapped "\n"
+        this.startIndex = start_index;
+    };
+    PenKlassProto.getRawText = function () {
+        var txt = this.text || "";
+        if (this.newLineMode == RAW_NEWLINE)
+            txt += "\n";
+        return txt;
+    }
+    PenKlassProto.getNextStartIndex = function () {
+        return this.startIndex + this.getRawText().length;
+    };
+    PenKlassProto.getEndIndex = function () {
+        return this.getNextStartIndex() - 1;
+    };
+    PenKlassProto.getLastX = function () {
+        return this.x + this.width;
+    };
+    var ImageBankKlass = function () {
+        this.images = {};
+    }
+    var ImageBankKlassProto = ImageBankKlass.prototype;
+    ImageBankKlassProto.AddImage = function (name, inst, yoffset_) {
+        var img = getImage(inst)
+        if (!inst)
+            return;
+        this.images[name] = {
+            img: img,
+            width: inst.width,
+            height: inst.height,
+            yoffset: yoffset_
+        };
+    };
+    ImageBankKlassProto.GetImage = function (name, inst) {
+        return this.images[name];
+    };
+    ImageBankKlassProto.RemoveImage = function (name) {
+        if (this.images.hasOwnProperty(name))
+            delete this.images[name];
+    };
+    ImageBankKlassProto.RemoveAll = function () {
+        for (var n in this.images)
+            delete this.images[n];
+    };
+    var getImage = function (inst) {
+        if (!inst)
+            return null;
+        var img;
+        if (inst.canvas)
+            img = inst.canvas;
+        else if (inst.curFrame && inst.curFrame.texture_img)
+            img = inst.curFrame.texture_img;
+        else
+            img = null;
+        return img;
+    };
+    window.RexImageBank = new ImageBankKlass();
 }());
 ;
 ;
-cr.behaviors.EightDir = function(runtime)
+cr.behaviors.Bullet = function(runtime)
 {
 	this.runtime = runtime;
 };
 (function ()
 {
-	var behaviorProto = cr.behaviors.EightDir.prototype;
+	var behaviorProto = cr.behaviors.Bullet.prototype;
 	behaviorProto.Type = function(behavior, objtype)
 	{
 		this.behavior = behavior;
@@ -24042,412 +26219,735 @@ cr.behaviors.EightDir = function(runtime)
 		this.behavior = type.behavior;
 		this.inst = inst;				// associated object instance to modify
 		this.runtime = type.runtime;
-		this.upkey = false;
-		this.downkey = false;
-		this.leftkey = false;
-		this.rightkey = false;
-		this.ignoreInput = false;
-		this.simup = false;
-		this.simdown = false;
-		this.simleft = false;
-		this.simright = false;
-		this.lastuptick = -1;
-		this.lastdowntick = -1;
-		this.lastlefttick = -1;
-		this.lastrighttick = -1;
-		this.dx = 0;
-		this.dy = 0;
 	};
 	var behinstProto = behaviorProto.Instance.prototype;
 	behinstProto.onCreate = function()
 	{
-		this.maxspeed = this.properties[0];
+		var speed = this.properties[0];
 		this.acc = this.properties[1];
-		this.dec = this.properties[2];
-		this.directions = this.properties[3];	// 0=Up & down, 1=Left & right, 2=4 directions, 3=8 directions"
-		this.angleMode = this.properties[4];	// 0=No,1=90-degree intervals, 2=45-degree intervals, 3=360 degree (smooth)
-		this.defaultControls = (this.properties[5] === 1);	// 0=no, 1=yes
-		this.enabled = (this.properties[6] !== 0);
-		if (this.defaultControls && !this.runtime.isDomFree)
-		{
-			jQuery(document).keydown(
-				(function (self) {
-					return function(info) {
-						self.onKeyDown(info);
-					};
-				})(this)
-			);
-			jQuery(document).keyup(
-				(function (self) {
-					return function(info) {
-						self.onKeyUp(info);
-					};
-				})(this)
-			);
-		}
+		this.g = this.properties[2];
+		this.bounceOffSolid = (this.properties[3] !== 0);
+		this.setAngle = (this.properties[4] !== 0);
+		this.dx = Math.cos(this.inst.angle) * speed;
+		this.dy = Math.sin(this.inst.angle) * speed;
+		this.lastx = this.inst.x;
+		this.lasty = this.inst.y;
+		this.lastKnownAngle = this.inst.angle;
+		this.travelled = 0;
+		this.enabled = (this.properties[5] !== 0);
 	};
 	behinstProto.saveToJSON = function ()
 	{
 		return {
+			"acc": this.acc,
+			"g": this.g,
 			"dx": this.dx,
 			"dy": this.dy,
-			"enabled": this.enabled,
-			"maxspeed": this.maxspeed,
-			"acc": this.acc,
-			"dec": this.dec,
-			"ignoreInput": this.ignoreInput
+			"lx": this.lastx,
+			"ly": this.lasty,
+			"lka": this.lastKnownAngle,
+			"t": this.travelled,
+			"e": this.enabled
 		};
 	};
 	behinstProto.loadFromJSON = function (o)
 	{
+		this.acc = o["acc"];
+		this.g = o["g"];
 		this.dx = o["dx"];
 		this.dy = o["dy"];
-		this.enabled = o["enabled"];
-		this.maxspeed = o["maxspeed"];
-		this.acc = o["acc"];
-		this.dec = o["dec"];
-		this.ignoreInput = o["ignoreInput"];
-		this.upkey = false;
-		this.downkey = false;
-		this.leftkey = false;
-		this.rightkey = false;
-		this.simup = false;
-		this.simdown = false;
-		this.simleft = false;
-		this.simright = false;
-		this.lastuptick = -1;
-		this.lastdowntick = -1;
-		this.lastlefttick = -1;
-		this.lastrighttick = -1;
-	};
-	behinstProto.onKeyDown = function (info)
-	{
-		var tickcount = this.runtime.tickcount;
-		switch (info.which) {
-		case 37:	// left
-			info.preventDefault();
-			if (this.lastlefttick < tickcount)
-				this.leftkey = true;
-			break;
-		case 38:	// up
-			info.preventDefault();
-			if (this.lastuptick < tickcount)
-				this.upkey = true;
-			break;
-		case 39:	// right
-			info.preventDefault();
-			if (this.lastrighttick < tickcount)
-				this.rightkey = true;
-			break;
-		case 40:	// down
-			info.preventDefault();
-			if (this.lastdowntick < tickcount)
-				this.downkey = true;
-			break;
-		}
-	};
-	behinstProto.onKeyUp = function (info)
-	{
-		var tickcount = this.runtime.tickcount;
-		switch (info.which) {
-		case 37:	// left
-			info.preventDefault();
-			this.leftkey = false;
-			this.lastlefttick = tickcount;
-			break;
-		case 38:	// up
-			info.preventDefault();
-			this.upkey = false;
-			this.lastuptick = tickcount;
-			break;
-		case 39:	// right
-			info.preventDefault();
-			this.rightkey = false;
-			this.lastrighttick = tickcount;
-			break;
-		case 40:	// down
-			info.preventDefault();
-			this.downkey = false;
-			this.lastdowntick = tickcount;
-			break;
-		}
-	};
-	behinstProto.onWindowBlur = function ()
-	{
-		this.upkey = false;
-		this.downkey = false;
-		this.leftkey = false;
-		this.rightkey = false;
+		this.lastx = o["lx"];
+		this.lasty = o["ly"];
+		this.lastKnownAngle = o["lka"];
+		this.travelled = o["t"];
+		this.enabled = o["e"];
 	};
 	behinstProto.tick = function ()
 	{
-		var dt = this.runtime.getDt(this.inst);
-		var left = this.leftkey || this.simleft;
-		var right = this.rightkey || this.simright;
-		var up = this.upkey || this.simup;
-		var down = this.downkey || this.simdown;
-		this.simleft = false;
-		this.simright = false;
-		this.simup = false;
-		this.simdown = false;
 		if (!this.enabled)
 			return;
-		var collobj = this.runtime.testOverlapSolid(this.inst);
-		if (collobj)
+		var dt = this.runtime.getDt(this.inst);
+		var s, a;
+		var bounceSolid, bounceAngle;
+		if (this.inst.angle !== this.lastKnownAngle)
 		{
-			this.runtime.registerCollision(this.inst, collobj);
-			if (!this.runtime.pushOutSolidNearest(this.inst))
-				return;		// must be stuck in solid
-		}
-		if (this.ignoreInput)
-		{
-			left = false;
-			right = false;
-			up = false;
-			down = false;
-		}
-		if (this.directions === 0)
-		{
-			left = false;
-			right = false;
-		}
-		else if (this.directions === 1)
-		{
-			up = false;
-			down = false;
-		}
-		if (this.directions === 2 && (up || down))
-		{
-			left = false;
-			right = false;
-		}
-		if (left == right)	// both up or both down
-		{
-			if (this.dx < 0)
+			if (this.setAngle)
 			{
-				this.dx += this.dec * dt;
-				if (this.dx > 0)
-					this.dx = 0;
+				s = cr.distanceTo(0, 0, this.dx, this.dy);
+				this.dx = Math.cos(this.inst.angle) * s;
+				this.dy = Math.sin(this.inst.angle) * s;
 			}
-			else if (this.dx > 0)
-			{
-				this.dx -= this.dec * dt;
-				if (this.dx < 0)
-					this.dx = 0;
-			}
+			this.lastKnownAngle = this.inst.angle;
 		}
-		if (up == down)
+		if (this.acc !== 0)
 		{
-			if (this.dy < 0)
-			{
-				this.dy += this.dec * dt;
-				if (this.dy > 0)
-					this.dy = 0;
-			}
-			else if (this.dy > 0)
-			{
-				this.dy -= this.dec * dt;
-				if (this.dy < 0)
-					this.dy = 0;
-			}
-		}
-		if (left && !right)
-		{
-			if (this.dx > 0)
-				this.dx -= (this.acc + this.dec) * dt;
+			s = cr.distanceTo(0, 0, this.dx, this.dy);
+			if (this.dx === 0 && this.dy === 0)
+				a = this.inst.angle;
 			else
-				this.dx -= this.acc * dt;
+				a = cr.angleTo(0, 0, this.dx, this.dy);
+			s += this.acc * dt;
+			if (s < 0)
+				s = 0;
+			this.dx = Math.cos(a) * s;
+			this.dy = Math.sin(a) * s;
 		}
-		if (right && !left)
-		{
-			if (this.dx < 0)
-				this.dx += (this.acc + this.dec) * dt;
-			else
-				this.dx += this.acc * dt;
-		}
-		if (up && !down)
-		{
-			if (this.dy > 0)
-				this.dy -= (this.acc + this.dec) * dt;
-			else
-				this.dy -= this.acc * dt;
-		}
-		if (down && !up)
-		{
-			if (this.dy < 0)
-				this.dy += (this.acc + this.dec) * dt;
-			else
-				this.dy += this.acc * dt;
-		}
-		var ax, ay;
+		if (this.g !== 0)
+			this.dy += this.g * dt;
+		this.lastx = this.inst.x;
+		this.lasty = this.inst.y;
 		if (this.dx !== 0 || this.dy !== 0)
 		{
-			var speed = Math.sqrt(this.dx * this.dx + this.dy * this.dy);
-			if (speed > this.maxspeed)
-			{
-				var a = Math.atan2(this.dy, this.dx);
-				this.dx = this.maxspeed * Math.cos(a);
-				this.dy = this.maxspeed * Math.sin(a);
-			}
-			var oldx = this.inst.x;
-			var oldy = this.inst.y;
-			var oldangle = this.inst.angle;
 			this.inst.x += this.dx * dt;
-			this.inst.set_bbox_changed();
-			collobj = this.runtime.testOverlapSolid(this.inst);
-			if (collobj)
-			{
-				if (!this.runtime.pushOutSolid(this.inst, (this.dx < 0 ? 1 : -1), 0, Math.abs(Math.floor(this.dx * dt))))
-				{
-					this.inst.x = oldx;
-				}
-				this.dx = 0;
-				this.inst.set_bbox_changed();
-				this.runtime.registerCollision(this.inst, collobj);
-			}
 			this.inst.y += this.dy * dt;
-			this.inst.set_bbox_changed();
-			collobj = this.runtime.testOverlapSolid(this.inst);
-			if (collobj)
+			this.travelled += cr.distanceTo(0, 0, this.dx * dt, this.dy * dt)
+			if (this.setAngle)
 			{
-				if (!this.runtime.pushOutSolid(this.inst, 0, (this.dy < 0 ? 1 : -1), Math.abs(Math.floor(this.dy * dt))))
-				{
-					this.inst.y = oldy;
-				}
-				this.dy = 0;
+				this.inst.angle = cr.angleTo(0, 0, this.dx, this.dy);
 				this.inst.set_bbox_changed();
-				this.runtime.registerCollision(this.inst, collobj);
-			}
-			ax = cr.round6dp(this.dx);
-			ay = cr.round6dp(this.dy);
-			if ((ax !== 0 || ay !== 0) && this.inst.type.plugin.is_rotatable)
-			{
-				if (this.angleMode === 1)	// 90 degree intervals
-					this.inst.angle = cr.to_clamped_radians(Math.round(cr.to_degrees(Math.atan2(ay, ax)) / 90.0) * 90.0);
-				else if (this.angleMode === 2)	// 45 degree intervals
-					this.inst.angle = cr.to_clamped_radians(Math.round(cr.to_degrees(Math.atan2(ay, ax)) / 45.0) * 45.0);
-				else if (this.angleMode === 3)	// 360 degree
-					this.inst.angle = Math.atan2(ay, ax);
+				this.lastKnownAngle = this.inst.angle;
 			}
 			this.inst.set_bbox_changed();
-			if (this.inst.angle != oldangle)
+			if (this.bounceOffSolid)
 			{
-				collobj = this.runtime.testOverlapSolid(this.inst);
-				if (collobj)
+				bounceSolid = this.runtime.testOverlapSolid(this.inst);
+				if (bounceSolid)
 				{
-					this.inst.angle = oldangle;
+					this.runtime.registerCollision(this.inst, bounceSolid);
+					s = cr.distanceTo(0, 0, this.dx, this.dy);
+					bounceAngle = this.runtime.calculateSolidBounceAngle(this.inst, this.lastx, this.lasty);
+					this.dx = Math.cos(bounceAngle) * s;
+					this.dy = Math.sin(bounceAngle) * s;
+					this.inst.x += this.dx * dt;			// move out for one tick since the object can't have spent a tick in the solid
+					this.inst.y += this.dy * dt;
 					this.inst.set_bbox_changed();
-					this.runtime.registerCollision(this.inst, collobj);
+					if (this.setAngle)
+					{
+						this.inst.angle = bounceAngle;
+						this.lastKnownAngle = bounceAngle;
+						this.inst.set_bbox_changed();
+					}
+					if (!this.runtime.pushOutSolid(this.inst, this.dx / s, this.dy / s, Math.max(s * 2.5 * dt, 30)))
+						this.runtime.pushOutSolidNearest(this.inst, 100);
 				}
 			}
 		}
 	};
 	function Cnds() {};
-	Cnds.prototype.IsMoving = function ()
-	{
-		var speed = Math.sqrt(this.dx * this.dx + this.dy * this.dy);
-		return speed > 1e-10;
-	};
 	Cnds.prototype.CompareSpeed = function (cmp, s)
 	{
-		var speed = Math.sqrt(this.dx * this.dx + this.dy * this.dy);
-		return cr.do_cmp(speed, cmp, s);
+		return cr.do_cmp(cr.distanceTo(0, 0, this.dx, this.dy), cmp, s);
+	};
+	Cnds.prototype.CompareTravelled = function (cmp, d)
+	{
+		return cr.do_cmp(this.travelled, cmp, d);
 	};
 	behaviorProto.cnds = new Cnds();
 	function Acts() {};
-	Acts.prototype.Stop = function ()
+	Acts.prototype.SetSpeed = function (s)
 	{
-		this.dx = 0;
-		this.dy = 0;
+		var a = cr.angleTo(0, 0, this.dx, this.dy);
+		this.dx = Math.cos(a) * s;
+		this.dy = Math.sin(a) * s;
 	};
-	Acts.prototype.Reverse = function ()
+	Acts.prototype.SetAcceleration = function (a)
 	{
-		this.dx *= -1;
-		this.dy *= -1;
+		this.acc = a;
 	};
-	Acts.prototype.SetIgnoreInput = function (ignoring)
+	Acts.prototype.SetGravity = function (g)
 	{
-		this.ignoreInput = ignoring;
+		this.g = g;
 	};
-	Acts.prototype.SetSpeed = function (speed)
+	Acts.prototype.SetAngleOfMotion = function (a)
 	{
-		if (speed < 0)
-			speed = 0;
-		if (speed > this.maxspeed)
-			speed = this.maxspeed;
-		var a = Math.atan2(this.dy, this.dx);
-		this.dx = speed * Math.cos(a);
-		this.dy = speed * Math.sin(a);
+		a = cr.to_radians(a);
+		var s = cr.distanceTo(0, 0, this.dx, this.dy)
+		this.dx = Math.cos(a) * s;
+		this.dy = Math.sin(a) * s;
 	};
-	Acts.prototype.SetMaxSpeed = function (maxspeed)
+	Acts.prototype.Bounce = function (objtype)
 	{
-		this.maxspeed = maxspeed;
-		if (this.maxspeed < 0)
-			this.maxspeed = 0;
-	};
-	Acts.prototype.SetAcceleration = function (acc)
-	{
-		this.acc = acc;
-		if (this.acc < 0)
-			this.acc = 0;
-	};
-	Acts.prototype.SetDeceleration = function (dec)
-	{
-		this.dec = dec;
-		if (this.dec < 0)
-			this.dec = 0;
-	};
-	Acts.prototype.SimulateControl = function (ctrl)
-	{
-		switch (ctrl) {
-		case 0:		this.simleft = true;	break;
-		case 1:		this.simright = true;	break;
-		case 2:		this.simup = true;		break;
-		case 3:		this.simdown = true;	break;
+		if (!objtype)
+			return;
+		var otherinst = objtype.getFirstPicked(this.inst);
+		if (!otherinst)
+			return;
+		var dt = this.runtime.getDt(this.inst);
+		var s = cr.distanceTo(0, 0, this.dx, this.dy);
+		var bounceAngle = this.runtime.calculateSolidBounceAngle(this.inst, this.lastx, this.lasty, otherinst);
+		this.dx = Math.cos(bounceAngle) * s;
+		this.dy = Math.sin(bounceAngle) * s;
+		this.inst.x += this.dx * dt;			// move out for one tick since the object can't have spent a tick in the solid
+		this.inst.y += this.dy * dt;
+		this.inst.set_bbox_changed();
+		if (this.setAngle)
+		{
+			this.inst.angle = bounceAngle;
+			this.lastKnownAngle = bounceAngle;
+			this.inst.set_bbox_changed();
 		}
+		if (s !== 0)		// prevent divide-by-zero
+		{
+			if (this.bounceOffSolid)
+			{
+				if (!this.runtime.pushOutSolid(this.inst, this.dx / s, this.dy / s, Math.max(s * 2.5 * dt, 30)))
+					this.runtime.pushOutSolidNearest(this.inst, 100);
+			}
+			else
+			{
+				this.runtime.pushOut(this.inst, this.dx / s, this.dy / s, Math.max(s * 2.5 * dt, 30), otherinst)
+			}
+		}
+	};
+	Acts.prototype.SetDistanceTravelled = function (d)
+	{
+		this.travelled = d;
 	};
 	Acts.prototype.SetEnabled = function (en)
 	{
 		this.enabled = (en === 1);
 	};
-	Acts.prototype.SetVectorX = function (x_)
-	{
-		this.dx = x_;
-	};
-	Acts.prototype.SetVectorY = function (y_)
-	{
-		this.dy = y_;
-	};
 	behaviorProto.acts = new Acts();
 	function Exps() {};
 	Exps.prototype.Speed = function (ret)
 	{
-		ret.set_float(Math.sqrt(this.dx * this.dx + this.dy * this.dy));
-	};
-	Exps.prototype.MaxSpeed = function (ret)
-	{
-		ret.set_float(this.maxspeed);
+		var s = cr.distanceTo(0, 0, this.dx, this.dy);
+		s = cr.round6dp(s);
+		ret.set_float(s);
 	};
 	Exps.prototype.Acceleration = function (ret)
 	{
 		ret.set_float(this.acc);
 	};
-	Exps.prototype.Deceleration = function (ret)
+	Exps.prototype.AngleOfMotion = function (ret)
 	{
-		ret.set_float(this.dec);
+		ret.set_float(cr.to_degrees(cr.angleTo(0, 0, this.dx, this.dy)));
 	};
-	Exps.prototype.MovingAngle = function (ret)
+	Exps.prototype.DistanceTravelled = function (ret)
 	{
-		ret.set_float(cr.to_degrees(Math.atan2(this.dy, this.dx)));
+		ret.set_float(this.travelled);
 	};
-	Exps.prototype.VectorX = function (ret)
+	Exps.prototype.Gravity = function (ret)
 	{
-		ret.set_float(this.dx);
+		ret.set_float(this.g);
 	};
-	Exps.prototype.VectorY = function (ret)
+	behaviorProto.exps = new Exps();
+}());
+;
+;
+cr.behaviors.DragnDrop = function(runtime)
+{
+	this.runtime = runtime;
+	var self = this;
+	if (!this.runtime.isDomFree)
 	{
-		ret.set_float(this.dy);
+		jQuery(document).mousemove(
+			function(info) {
+				self.onMouseMove(info);
+			}
+		);
+		jQuery(document).mousedown(
+			function(info) {
+				self.onMouseDown(info);
+			}
+		);
+		jQuery(document).mouseup(
+			function(info) {
+				self.onMouseUp(info);
+			}
+		);
+	}
+	var elem = (this.runtime.fullscreen_mode > 0) ? document : this.runtime.canvas;
+	if (this.runtime.isDirectCanvas)
+		elem = window["Canvas"];
+	else if (this.runtime.isCocoonJs)
+		elem = window;
+	if (typeof PointerEvent !== "undefined")
+	{
+		elem.addEventListener("pointerdown",
+			function(info) {
+				self.onPointerStart(info);
+			},
+			false
+		);
+		elem.addEventListener("pointermove",
+			function(info) {
+				self.onPointerMove(info);
+			},
+			false
+		);
+		elem.addEventListener("pointerup",
+			function(info) {
+				self.onPointerEnd(info);
+			},
+			false
+		);
+		elem.addEventListener("pointercancel",
+			function(info) {
+				self.onPointerEnd(info);
+			},
+			false
+		);
+	}
+	else if (window.navigator["msPointerEnabled"])
+	{
+		elem.addEventListener("MSPointerDown",
+			function(info) {
+				self.onPointerStart(info);
+			},
+			false
+		);
+		elem.addEventListener("MSPointerMove",
+			function(info) {
+				self.onPointerMove(info);
+			},
+			false
+		);
+		elem.addEventListener("MSPointerUp",
+			function(info) {
+				self.onPointerEnd(info);
+			},
+			false
+		);
+		elem.addEventListener("MSPointerCancel",
+			function(info) {
+				self.onPointerEnd(info);
+			},
+			false
+		);
+	}
+	else
+	{
+		elem.addEventListener("touchstart",
+			function(info) {
+				self.onTouchStart(info);
+			},
+			false
+		);
+		elem.addEventListener("touchmove",
+			function(info) {
+				self.onTouchMove(info);
+			},
+			false
+		);
+		elem.addEventListener("touchend",
+			function(info) {
+				self.onTouchEnd(info);
+			},
+			false
+		);
+		elem.addEventListener("touchcancel",
+			function(info) {
+				self.onTouchEnd(info);
+			},
+			false
+		);
+	}
+};
+(function ()
+{
+	var behaviorProto = cr.behaviors.DragnDrop.prototype;
+	var dummyoffset = {left: 0, top: 0};
+	function GetDragDropBehavior(inst)
+	{
+		var i, len;
+		for (i = 0, len = inst.behavior_insts.length; i < len; i++)
+		{
+			if (inst.behavior_insts[i] instanceof behaviorProto.Instance)
+				return inst.behavior_insts[i];
+		}
+		return null;
 	};
+	behaviorProto.onMouseDown = function (info)
+	{
+		if (info.which !== 1)
+			return;		// not left mouse button
+		this.onInputDown("leftmouse", info.pageX, info.pageY);
+	};
+	behaviorProto.onMouseMove = function (info)
+	{
+		if (info.which !== 1)
+			return;		// not left mouse button
+		this.onInputMove("leftmouse", info.pageX, info.pageY);
+	};
+	behaviorProto.onMouseUp = function (info)
+	{
+		if (info.which !== 1)
+			return;		// not left mouse button
+		this.onInputUp("leftmouse");
+	};
+	behaviorProto.onTouchStart = function (info)
+	{
+		if (info.preventDefault && cr.isCanvasInputEvent(info))
+			info.preventDefault();
+		var i, len, t, id;
+		for (i = 0, len = info.changedTouches.length; i < len; i++)
+		{
+			t = info.changedTouches[i];
+			id = t.identifier;
+			this.onInputDown(id ? id.toString() : "<none>", t.pageX, t.pageY);
+		}
+	};
+	behaviorProto.onTouchMove = function (info)
+	{
+		if (info.preventDefault)
+			info.preventDefault();
+		var i, len, t, id;
+		for (i = 0, len = info.changedTouches.length; i < len; i++)
+		{
+			t = info.changedTouches[i];
+			id = t.identifier;
+			this.onInputMove(id ? id.toString() : "<none>", t.pageX, t.pageY);
+		}
+	};
+	behaviorProto.onTouchEnd = function (info)
+	{
+		if (info.preventDefault && cr.isCanvasInputEvent(info))
+			info.preventDefault();
+		var i, len, t, id;
+		for (i = 0, len = info.changedTouches.length; i < len; i++)
+		{
+			t = info.changedTouches[i];
+			id = t.identifier;
+			this.onInputUp(id ? id.toString() : "<none>");
+		}
+	};
+	behaviorProto.onPointerStart = function (info)
+	{
+		if (info["pointerType"] === info["MSPOINTER_TYPE_MOUSE"] || info["pointerType"] === "mouse")
+			return;
+		if (info.preventDefault && cr.isCanvasInputEvent(info))
+			info.preventDefault();
+		this.onInputDown(info["pointerId"].toString(), info.pageX, info.pageY);
+	};
+	behaviorProto.onPointerMove = function (info)
+	{
+		if (info["pointerType"] === info["MSPOINTER_TYPE_MOUSE"] || info["pointerType"] === "mouse")
+			return;
+		if (info.preventDefault)
+			info.preventDefault();
+		this.onInputMove(info["pointerId"].toString(), info.pageX, info.pageY);
+	};
+	behaviorProto.onPointerEnd = function (info)
+	{
+		if (info["pointerType"] === info["MSPOINTER_TYPE_MOUSE"] || info["pointerType"] === "mouse")
+			return;
+		if (info.preventDefault && cr.isCanvasInputEvent(info))
+			info.preventDefault();
+		this.onInputUp(info["pointerId"].toString());
+	};
+	behaviorProto.onInputDown = function (src, pageX, pageY)
+	{
+		var offset = this.runtime.isDomFree ? dummyoffset : jQuery(this.runtime.canvas).offset();
+		var x = pageX - offset.left;
+		var y = pageY - offset.top;
+		var lx, ly, topx, topy;
+		var arr = this.my_instances.valuesRef();
+		var i, len, b, inst, topmost = null;
+		for (i = 0, len = arr.length; i < len; i++)
+		{
+			inst = arr[i];
+			b = GetDragDropBehavior(inst);
+			if (!b.enabled || b.dragging)
+				continue;		// don't consider disabled or already-dragging instances
+			lx = inst.layer.canvasToLayer(x, y, true);
+			ly = inst.layer.canvasToLayer(x, y, false);
+			inst.update_bbox();
+			if (!inst.contains_pt(lx, ly))
+				continue;		// don't consider instances not over this point
+			if (!topmost)
+			{
+				topmost = inst;
+				topx = lx;
+				topy = ly;
+				continue;
+			}
+			if (inst.layer.index > topmost.layer.index)
+			{
+				topmost = inst;
+				topx = lx;
+				topy = ly;
+				continue;
+			}
+			if (inst.layer.index === topmost.layer.index && inst.get_zindex() > topmost.get_zindex())
+			{
+				topmost = inst;
+				topx = lx;
+				topy = ly;
+				continue;
+			}
+		}
+		if (topmost)
+			GetDragDropBehavior(topmost).onDown(src, topx, topy);
+	};
+	behaviorProto.onInputMove = function (src, pageX, pageY)
+	{
+		var offset = this.runtime.isDomFree ? dummyoffset : jQuery(this.runtime.canvas).offset();
+		var x = pageX - offset.left;
+		var y = pageY - offset.top;
+		var lx, ly;
+		var arr = this.my_instances.valuesRef();
+		var i, len, b, inst;
+		for (i = 0, len = arr.length; i < len; i++)
+		{
+			inst = arr[i];
+			b = GetDragDropBehavior(inst);
+			if (!b.enabled || !b.dragging || (b.dragging && b.dragsource !== src))
+				continue;		// don't consider disabled, not-dragging, or dragging by other sources
+			lx = inst.layer.canvasToLayer(x, y, true);
+			ly = inst.layer.canvasToLayer(x, y, false);
+			b.onMove(lx, ly);
+		}
+	};
+	behaviorProto.onInputUp = function (src)
+	{
+		var arr = this.my_instances.valuesRef();
+		var i, len, b, inst;
+		for (i = 0, len = arr.length; i < len; i++)
+		{
+			inst = arr[i];
+			b = GetDragDropBehavior(inst);
+			if (b.dragging && b.dragsource === src)
+				b.onUp();
+		}
+	};
+	behaviorProto.Type = function(behavior, objtype)
+	{
+		this.behavior = behavior;
+		this.objtype = objtype;
+		this.runtime = behavior.runtime;
+	};
+	var behtypeProto = behaviorProto.Type.prototype;
+	behtypeProto.onCreate = function()
+	{
+	};
+	behaviorProto.Instance = function(type, inst)
+	{
+		this.type = type;
+		this.behavior = type.behavior;
+		this.inst = inst;				// associated object instance to modify
+		this.runtime = type.runtime;
+	};
+	var behinstProto = behaviorProto.Instance.prototype;
+	behinstProto.onCreate = function()
+	{
+		this.dragging = false;
+		this.dx = 0;
+		this.dy = 0;
+		this.dragsource = "<none>";
+		this.axes = this.properties[0];
+		this.enabled = (this.properties[1] !== 0);
+	};
+	behinstProto.saveToJSON = function ()
+	{
+		return { "enabled": this.enabled };
+	};
+	behinstProto.loadFromJSON = function (o)
+	{
+		this.enabled = o["enabled"];
+		this.dragging = false;
+	};
+	behinstProto.onDown = function(src, x, y)
+	{
+		this.dx = x - this.inst.x;
+		this.dy = y - this.inst.y;
+		this.dragging = true;
+		this.dragsource = src;
+		this.runtime.isInUserInputEvent = true;
+		this.runtime.trigger(cr.behaviors.DragnDrop.prototype.cnds.OnDragStart, this.inst);
+		this.runtime.isInUserInputEvent = false;
+	};
+	behinstProto.onMove = function(x, y)
+	{
+		var newx = x - this.dx;
+		var newy = y - this.dy;
+		if (this.axes === 0)		// both
+		{
+			if (this.inst.x !== newx || this.inst.y !== newy)
+			{
+				this.inst.x = newx;
+				this.inst.y = newy;
+				this.inst.set_bbox_changed();
+			}
+		}
+		else if (this.axes === 1)	// horizontal
+		{
+			if (this.inst.x !== newx)
+			{
+				this.inst.x = newx;
+				this.inst.set_bbox_changed();
+			}
+		}
+		else if (this.axes === 2)	// vertical
+		{
+			if (this.inst.y !== newy)
+			{
+				this.inst.y = newy;
+				this.inst.set_bbox_changed();
+			}
+		}
+	};
+	behinstProto.onUp = function()
+	{
+		this.dragging = false;
+		this.runtime.isInUserInputEvent = true;
+		this.runtime.trigger(cr.behaviors.DragnDrop.prototype.cnds.OnDrop, this.inst);
+		this.runtime.isInUserInputEvent = false;
+	};
+	behinstProto.tick = function ()
+	{
+	};
+	function Cnds() {};
+	Cnds.prototype.IsDragging = function ()
+	{
+		return this.dragging;
+	};
+	Cnds.prototype.OnDragStart = function ()
+	{
+		return true;
+	};
+	Cnds.prototype.OnDrop = function ()
+	{
+		return true;
+	};
+	Cnds.prototype.IsEnabled = function ()
+	{
+		return !!this.enabled;
+	};
+	behaviorProto.cnds = new Cnds();
+	function Acts() {};
+	Acts.prototype.SetEnabled = function (s)
+	{
+		this.enabled = (s !== 0);
+		if (!this.enabled)
+			this.dragging = false;
+	};
+	Acts.prototype.Drop = function ()
+	{
+		if (this.dragging)
+			this.onUp();
+	};
+	behaviorProto.acts = new Acts();
+	function Exps() {};
+	behaviorProto.exps = new Exps();
+}());
+;
+;
+cr.behaviors.Flash = function(runtime)
+{
+	this.runtime = runtime;
+};
+(function ()
+{
+	var behaviorProto = cr.behaviors.Flash.prototype;
+	behaviorProto.Type = function(behavior, objtype)
+	{
+		this.behavior = behavior;
+		this.objtype = objtype;
+		this.runtime = behavior.runtime;
+	};
+	var behtypeProto = behaviorProto.Type.prototype;
+	behtypeProto.onCreate = function()
+	{
+	};
+	behaviorProto.Instance = function(type, inst)
+	{
+		this.type = type;
+		this.behavior = type.behavior;
+		this.inst = inst;				// associated object instance to modify
+		this.runtime = type.runtime;
+	};
+	var behinstProto = behaviorProto.Instance.prototype;
+	behinstProto.onCreate = function()
+	{
+		this.ontime = 0;
+		this.offtime = 0;
+		this.stage = 0;			// 0 = on, 1 = off
+		this.stagetimeleft = 0;
+		this.timeleft = 0;
+	};
+	behinstProto.saveToJSON = function ()
+	{
+		return {
+			"ontime": this.ontime,
+			"offtime": this.offtime,
+			"stage": this.stage,
+			"stagetimeleft": this.stagetimeleft,
+			"timeleft": this.timeleft
+		};
+	};
+	behinstProto.loadFromJSON = function (o)
+	{
+		this.ontime = o["ontime"];
+		this.offtime = o["offtime"];
+		this.stage = o["stage"];
+		this.stagetimeleft = o["stagetimeleft"];
+		this.timeleft = o["timeleft"];
+		if (this.timeleft === null)
+			this.timeleft = Infinity;
+	};
+	behinstProto.tick = function ()
+	{
+		if (this.timeleft <= 0)
+			return;		// not flashing
+		var dt = this.runtime.getDt(this.inst);
+		this.timeleft -= dt;
+		if (this.timeleft <= 0)
+		{
+			this.timeleft = 0;
+			this.inst.visible = true;
+			this.runtime.redraw = true;
+			this.runtime.trigger(cr.behaviors.Flash.prototype.cnds.OnFlashEnded, this.inst);
+			return;
+		}
+		this.stagetimeleft -= dt;
+		if (this.stagetimeleft <= 0)
+		{
+			if (this.stage === 0)
+			{
+				this.inst.visible = false;
+				this.stage = 1;
+				this.stagetimeleft += this.offtime;
+			}
+			else
+			{
+				this.inst.visible = true;
+				this.stage = 0;
+				this.stagetimeleft += this.ontime;
+			}
+			this.runtime.redraw = true;
+		}
+	};
+	function Cnds() {};
+	Cnds.prototype.IsFlashing = function ()
+	{
+		return this.timeleft > 0;
+	};
+	Cnds.prototype.OnFlashEnded = function ()
+	{
+		return true;
+	};
+	behaviorProto.cnds = new Cnds();
+	function Acts() {};
+	Acts.prototype.Flash = function (on_, off_, dur_)
+	{
+		this.ontime = on_;
+		this.offtime = off_;
+		this.stage = 1;		// always start off
+		this.stagetimeleft = off_;
+		this.timeleft = dur_;
+		this.inst.visible = false;
+		this.runtime.redraw = true;
+	};
+	Acts.prototype.StopFlashing = function ()
+	{
+		this.timeleft = 0;
+		this.inst.visible = true;
+		this.runtime.redraw = true;
+		return;
+	};
+	behaviorProto.acts = new Acts();
+	function Exps() {};
 	behaviorProto.exps = new Exps();
 }());
 ;
@@ -24765,6 +27265,443 @@ cr.behaviors.Rex_MoveTo = function(runtime)
 }());
 ;
 ;
+cr.behaviors.Rex_text_typing = function(runtime)
+{
+	this.runtime = runtime;
+};
+(function ()
+{
+	var behaviorProto = cr.behaviors.Rex_text_typing.prototype;
+	behaviorProto.Type = function(behavior, objtype)
+	{
+		this.behavior = behavior;
+		this.objtype = objtype;
+		this.runtime = behavior.runtime;
+	};
+	var behtypeProto = behaviorProto.Type.prototype;
+	behtypeProto.onCreate = function()
+	{
+        this.timeline = null;
+        this.timelineUid = -1;    // for loading
+	};
+    behtypeProto._timeline_get = function ()
+    {
+        if (this.timeline != null)
+            return this.timeline;
+;
+        var plugins = this.runtime.types;
+        var name, inst;
+        for (name in plugins)
+        {
+            inst = plugins[name].instances[0];
+            if (inst instanceof cr.plugins_.Rex_TimeLine.prototype.Instance)
+            {
+                this.timeline = inst;
+                return this.timeline;
+            }
+        }
+;
+        return null;
+    };
+	behaviorProto.Instance = function(type, inst)
+	{
+		this.type = type;
+		this.behavior = type.behavior;
+		this.inst = inst;
+		this.runtime = type.runtime;
+	};
+	var behinstProto = behaviorProto.Instance.prototype;
+	behinstProto.onCreate = function()
+	{
+        this.typing_timer = null;
+        this.typing_speed = 0;
+        this.typing_index = 0;
+        this.content = "";
+        this.raw_text_length = 0;
+        this.timer_save = null;
+		this._text_type = "";
+		this._set_text_handler = this._set_text_handler_get();
+	};
+	behinstProto.onDestroy = function()
+	{
+        this.typing_timer_remove();
+	};
+	behinstProto.typing_timer_remove = function ()
+	{
+        if (this.typing_timer != null)
+            this.typing_timer.Remove();
+    };
+	behinstProto.tick = function ()
+	{
+	};
+	behinstProto._text_type_get = function ()
+	{
+	    var text_type;
+        if (cr.plugins_.Text &&
+		    (this.inst instanceof cr.plugins_.Text.prototype.Instance))
+	        text_type = "Text";
+	    else if (cr.plugins_.Spritefont2 &&
+		         (this.inst instanceof cr.plugins_.Spritefont2.prototype.Instance))
+			text_type = "Spritefont2";
+	    else if (cr.plugins_.rex_TagText &&
+		         (this.inst instanceof cr.plugins_.rex_TagText.prototype.Instance))
+		    text_type = "rex_TagText";
+		else
+		    text_type = "";
+		return text_type;
+	};
+	behinstProto._set_text_handler_get = function ()
+	{
+	    this.text_type = this._text_type_get();
+	    var set_text_handler;
+        if (this.text_type == "Text")
+	        set_text_handler = cr.plugins_.Text.prototype.acts.SetText;
+	    else if (this.text_type == "Spritefont2")
+			set_text_handler = cr.plugins_.Spritefont2.prototype.acts.SetText;
+	    else if (this.text_type == "rex_TagText")
+			set_text_handler = cr.plugins_.rex_TagText.prototype.acts.SetText;
+	    else
+		    set_text_handler = null;
+	    return set_text_handler;
+    };
+	behinstProto._get_raw_text_length = function (content)
+	{
+	    var len;
+		if ((this.text_type == "Text") || (this.text_type == "Spritefont2"))
+		    len = content.length;
+        else if (this.text_type == "rex_TagText")
+            len = this.inst.rawTextGet(content).length;
+        else
+            len = 0;
+        return len;
+	};
+	behinstProto.SetText = function (content, start_index, end_index)
+	{
+	    if (this._set_text_handler == null)
+		    return;
+	    if (start_index == null)
+	        start_index = 0;
+	    if (end_index == null)
+	        end_index = this.raw_text_length;
+		if ((this.text_type == "Text") || (this.text_type == "Spritefont2"))
+		{
+		    content = content.slice(start_index, end_index);
+            this._set_text_handler.call(this.inst, content);
+        }
+        else if (this.text_type == "rex_TagText")
+        {
+            content = this.inst.subTextGet(content, start_index, end_index);
+            this._set_text_handler.call(this.inst, content);
+        }
+	};
+    behinstProto._get_timer = function ()
+    {
+        var timer = this.typing_timer;
+        if  (timer == null)
+        {
+            var timeline = this.type._timeline_get();
+;
+            timer = timeline.CreateTimer(on_timeout);
+            timer.plugin = this;
+        }
+        return timer;
+    };
+	behinstProto._start_typing = function (text, speed, start_index)
+	{
+	    this.raw_text_length = this._get_raw_text_length(text);
+        if (speed != 0)
+        {
+            if (start_index == null)
+                start_index = 1;
+            this.typing_timer = this._get_timer();
+            this.typing_speed = speed;
+            this.typing_index = start_index;
+            this.typing_timer.Start(0);
+        }
+        else
+        {
+            this.typing_index = this.raw_text_length;
+            this.SetText(this.content);
+            this.runtime.trigger(cr.behaviors.Rex_text_typing.prototype.cnds.OnTypingCompleted, this.inst);
+        }
+    };
+    var on_timeout = function ()
+    {
+        this.plugin.text_typing_handler();
+    };
+	behinstProto.text_typing_handler = function()
+	{
+        this.SetText(this.content, 0, this.typing_index);
+        this.runtime.trigger(cr.behaviors.Rex_text_typing.prototype.cnds.OnTextTyping, this.inst);
+        this.typing_index += 1;
+        if (this.typing_index <= this.raw_text_length)
+            this.typing_timer.Restart(this.typing_speed);
+        else
+        {
+            this.typing_index = this.raw_text_length;
+            this.runtime.trigger(cr.behaviors.Rex_text_typing.prototype.cnds.OnTypingCompleted, this.inst);
+        }
+	};
+	behinstProto.is_typing = function ()
+	{
+        return (this.typing_timer)? this.typing_timer.IsActive():false;
+	};
+	behinstProto.saveToJSON = function ()
+	{
+		return { "content": this.content,
+		         "spd" : this.typing_speed,
+		         "i" : this.typing_index,
+		         "tim": (this.typing_timer != null)? this.typing_timer.saveToJSON() : null,
+                 "tluid": (this.type.timeline != null)? this.type.timeline.uid: (-1)
+                };
+	};
+	behinstProto.loadFromJSON = function (o)
+	{
+	    this.content = o["content"];
+	    this.typing_speed = o["spd"];
+	    this.typing_index = o["i"];
+        this.timer_save = o["tim"];
+        this.type.timelineUid = o["tluid"];
+	};
+	behinstProto.afterLoad = function ()
+	{
+		if (this.type.timelineUid === -1)
+			this.type.timeline = null;
+		else
+		{
+			this.type.timeline = this.runtime.getObjectByUID(this.type.timelineUid);
+;
+		}
+        if (this.timer_save == null)
+            this.typing_timer = null;
+        else
+        {
+            this.typing_timer = this.type.timeline.LoadTimer(this.timer_save, on_timeout);
+            this.typing_timer.plugin = this;
+        }
+        this.timers_save = null;
+	};
+	function Cnds() {};
+	behaviorProto.cnds = new Cnds();
+    Cnds.prototype.OnTextTyping = function ()
+	{
+		return true;
+	};
+    Cnds.prototype.OnTypingCompleted = function ()
+	{
+		return true;
+	};
+	Cnds.prototype.IsTextTyping = function ()
+	{
+        return this.is_typing();
+	};
+	function Acts() {};
+	behaviorProto.acts = new Acts();
+    Acts.prototype.SetupTimer = function (timeline_objs)
+	{
+        var timeline = timeline_objs.instances[0];
+        if (timeline.check_name == "TIMELINE")
+            this.type.timeline = timeline;
+        else
+            alert ("Text-typing should connect to a timeline object");
+	};
+	Acts.prototype.TypeText = function(param, speed)
+	{
+        if (typeof param === "number")
+            param = Math.round(param * 1e10) / 1e10;	// round to nearest ten billionth - hides floating point errors
+        this.content = param.toString();
+        this._start_typing(this.content, speed);
+	};
+	Acts.prototype.SetTypingSpeed = function(speed)
+	{
+        this.typing_speed = speed;
+        var timer = this.typing_timer;
+        if (timer.IsActive())
+        {
+            timer.Restart(speed);
+        }
+	};
+	Acts.prototype.StopTyping = function(is_show_all)
+	{
+        this.typing_timer_remove();
+        if (is_show_all)
+        {
+            this.SetText(this.content);
+            this.runtime.trigger(cr.behaviors.Rex_text_typing.prototype.cnds.OnTypingCompleted, this.inst);
+        }
+	};
+	Acts.prototype.AppendText = function(param)
+	{
+        var start_index = this.raw_text_length;
+        if (typeof param === "number")
+            param = Math.round(param * 1e10) / 1e10;	// round to nearest ten billionth - hides floating point errors
+        this.content += param.toString();
+        if (!this.is_typing())
+            this._start_typing(this.content, this.typing_speed, start_index);
+	};
+	function Exps() {};
+	behaviorProto.exps = new Exps();
+    Exps.prototype.TypingSpeed = function (ret)
+	{
+	    ret.set_float( this.typing_speed );
+	};
+    Exps.prototype.TypingIndex = function (ret)
+	{
+	    ret.set_float( this.typing_index );
+	};
+}());
+;
+;
+cr.behaviors.Timer = function(runtime)
+{
+	this.runtime = runtime;
+};
+(function ()
+{
+	var behaviorProto = cr.behaviors.Timer.prototype;
+	behaviorProto.Type = function(behavior, objtype)
+	{
+		this.behavior = behavior;
+		this.objtype = objtype;
+		this.runtime = behavior.runtime;
+	};
+	var behtypeProto = behaviorProto.Type.prototype;
+	behtypeProto.onCreate = function()
+	{
+	};
+	behaviorProto.Instance = function(type, inst)
+	{
+		this.type = type;
+		this.behavior = type.behavior;
+		this.inst = inst;				// associated object instance to modify
+		this.runtime = type.runtime;
+	};
+	var behinstProto = behaviorProto.Instance.prototype;
+	behinstProto.onCreate = function()
+	{
+		this.timers = {};
+	};
+	behinstProto.onDestroy = function ()
+	{
+		cr.wipe(this.timers);
+	};
+	behinstProto.saveToJSON = function ()
+	{
+		var o = {};
+		var p, t;
+		for (p in this.timers)
+		{
+			if (this.timers.hasOwnProperty(p))
+			{
+				t = this.timers[p];
+				o[p] = {
+					"c": t.current.sum,
+					"t": t.total.sum,
+					"d": t.duration,
+					"r": t.regular
+				};
+			}
+		}
+		return o;
+	};
+	behinstProto.loadFromJSON = function (o)
+	{
+		this.timers = {};
+		var p;
+		for (p in o)
+		{
+			if (o.hasOwnProperty(p))
+			{
+				this.timers[p] = {
+					current: new cr.KahanAdder(),
+					total: new cr.KahanAdder(),
+					duration: o[p]["d"],
+					regular: o[p]["r"]
+				};
+				this.timers[p].current.sum = o[p]["c"];
+				this.timers[p].total.sum = o[p]["t"];
+			}
+		}
+	};
+	behinstProto.tick = function ()
+	{
+		var dt = this.runtime.getDt(this.inst);
+		var p, t;
+		for (p in this.timers)
+		{
+			if (this.timers.hasOwnProperty(p))
+			{
+				t = this.timers[p];
+				t.current.add(dt);
+				t.total.add(dt);
+			}
+		}
+	};
+	behinstProto.tick2 = function ()
+	{
+		var p, t;
+		for (p in this.timers)
+		{
+			if (this.timers.hasOwnProperty(p))
+			{
+				t = this.timers[p];
+				if (t.current.sum >= t.duration)
+				{
+					if (t.regular)
+						t.current.sum -= t.duration;
+					else
+						delete this.timers[p];
+				}
+			}
+		}
+	};
+	function Cnds() {};
+	Cnds.prototype.OnTimer = function (tag_)
+	{
+		tag_ = tag_.toLowerCase();
+		var t = this.timers[tag_];
+		if (!t)
+			return false;
+		return t.current.sum >= t.duration;
+	};
+	behaviorProto.cnds = new Cnds();
+	function Acts() {};
+	Acts.prototype.StartTimer = function (duration_, type_, tag_)
+	{
+		this.timers[tag_.toLowerCase()] = {
+			current: new cr.KahanAdder(),
+			total: new cr.KahanAdder(),
+			duration: duration_,
+			regular: (type_ === 1)
+		};
+	};
+	Acts.prototype.StopTimer = function (tag_)
+	{
+		tag_ = tag_.toLowerCase();
+		if (this.timers.hasOwnProperty(tag_))
+			delete this.timers[tag_];
+	};
+	behaviorProto.acts = new Acts();
+	function Exps() {};
+	Exps.prototype.CurrentTime = function (ret, tag_)
+	{
+		var t = this.timers[tag_.toLowerCase()];
+		ret.set_float(t ? t.current.sum : 0);
+	};
+	Exps.prototype.TotalTime = function (ret, tag_)
+	{
+		var t = this.timers[tag_.toLowerCase()];
+		ret.set_float(t ? t.total.sum : 0);
+	};
+	Exps.prototype.Duration = function (ret, tag_)
+	{
+		var t = this.timers[tag_.toLowerCase()];
+		ret.set_float(t ? t.duration : 0);
+	};
+	behaviorProto.exps = new Exps();
+}());
+;
+;
 cr.behaviors.solid = function(runtime)
 {
 	this.runtime = runtime;
@@ -24811,59 +27748,146 @@ cr.behaviors.solid = function(runtime)
 	behaviorProto.acts = new Acts();
 }());
 cr.getObjectRefTable = function () { return [
+	cr.plugins_.AJAX,
+	cr.plugins_.Arr,
 	cr.plugins_.Audio,
 	cr.plugins_.Browser,
-	cr.plugins_.drawsprite,
-	cr.plugins_.rex_TouchWrap,
+	cr.plugins_.Function,
+	cr.plugins_.rex_TagText,
+	cr.plugins_.Rex_TimeLine,
+	cr.plugins_.TiledBg,
 	cr.plugins_.Touch,
-	cr.plugins_.Sprite,
 	cr.plugins_.Text,
-	cr.behaviors.Rex_MoveTo,
-	cr.behaviors.EightDir,
+	cr.plugins_.Sprite,
 	cr.behaviors.solid,
+	cr.behaviors.Bullet,
+	cr.behaviors.DragnDrop,
+	cr.behaviors.Rex_MoveTo,
+	cr.behaviors.Rex_text_typing,
+	cr.behaviors.Timer,
+	cr.behaviors.Flash,
 	cr.system_object.prototype.cnds.OnLayoutStart,
-	cr.plugins_.Sprite.prototype.acts.StopAnim,
+	cr.behaviors.Bullet.prototype.acts.SetAngleOfMotion,
+	cr.system_object.prototype.exps.random,
 	cr.system_object.prototype.acts.SetVar,
-	cr.plugins_.Sprite.prototype.cnds.CompareInstanceVar,
-	cr.behaviors.Rex_MoveTo.prototype.acts.SetTargetPos,
-	cr.system_object.prototype.cnds.CompareVar,
-	cr.plugins_.Sprite.prototype.acts.SetOpacity,
-	cr.system_object.prototype.cnds.Every,
-	cr.plugins_.Audio.prototype.acts.PlayByName,
-	cr.plugins_.Text.prototype.cnds.CompareInstanceVar,
-	cr.plugins_.Text.prototype.acts.SetText,
+	cr.plugins_.Sprite.prototype.acts.StopAnim,
 	cr.plugins_.Touch.prototype.cnds.OnTouchObject,
-	cr.behaviors.Rex_MoveTo.prototype.cnds.IsMoving,
-	cr.behaviors.Rex_MoveTo.prototype.acts.SetTargetPosByDistanceAngle,
-	cr.plugins_.Sprite.prototype.acts.SetVisible,
+	cr.plugins_.Sprite.prototype.acts.Destroy,
+	cr.system_object.prototype.cnds.CompareVar,
+	cr.plugins_.Audio.prototype.acts.PreloadByName,
+	cr.plugins_.Text.prototype.cnds.IsOutsideLayout,
+	cr.plugins_.Text.prototype.cnds.CompareInstanceVar,
 	cr.plugins_.Text.prototype.acts.SetFontColor,
 	cr.system_object.prototype.exps.rgb,
-	cr.plugins_.Text.prototype.cnds.CompareY,
-	cr.plugins_.Text.prototype.acts.SetY,
-	cr.plugins_.Text.prototype.exps.Text,
-	cr.system_object.prototype.cnds.Compare,
+	cr.behaviors.Bullet.prototype.acts.SetEnabled,
+	cr.plugins_.Audio.prototype.acts.PlayByName,
+	cr.plugins_.Text.prototype.acts.SetFontSize,
+	cr.plugins_.Text.prototype.acts.SetPosToObject,
+	cr.plugins_.Text.prototype.acts.SetInstanceVar,
 	cr.system_object.prototype.acts.AddVar,
-	cr.system_object.prototype.acts.Wait,
-	cr.plugins_.Sprite.prototype.cnds.IsOnScreen,
-	cr.system_object.prototype.acts.GoToLayout,
-	cr.plugins_.Sprite.prototype.acts.SetPos,
-	cr.plugins_.Touch.prototype.cnds.IsTouchingObject,
-	cr.plugins_.Browser.prototype.acts.GoToURL,
-	cr.plugins_.Audio.prototype.acts.Play,
-	cr.system_object.prototype.exps.choose,
-	cr.plugins_.drawsprite.prototype.acts.draw_sprite_maze,
-	cr.plugins_.Sprite.prototype.acts.MoveToTop,
-	cr.plugins_.rex_TouchWrap.prototype.cnds.IsTouchingObject,
-	cr.behaviors.EightDir.prototype.acts.SimulateControl,
-	cr.behaviors.EightDir.prototype.cnds.IsMoving,
-	cr.behaviors.EightDir.prototype.exps.MovingAngle,
-	cr.plugins_.Sprite.prototype.acts.SetInstanceVar,
+	cr.plugins_.Sprite.prototype.cnds.CompareInstanceVar,
+	cr.plugins_.Sprite.prototype.acts.SetVisible,
+	cr.plugins_.Text.prototype.cnds.CompareY,
 	cr.plugins_.Sprite.prototype.acts.SetAnim,
-	cr.plugins_.Sprite.prototype.cnds.OnCollision,
-	cr.plugins_.Sprite.prototype.acts.Spawn,
-	cr.behaviors.EightDir.prototype.acts.SetEnabled,
-	cr.plugins_.Sprite.prototype.acts.AddInstanceVar,
-	cr.system_object.prototype.exps.dt,
-	cr.plugins_.Sprite.prototype.acts.SetWidth,
-	cr.system_object.prototype.acts.RestartLayout
+	cr.plugins_.Text.prototype.acts.SetText,
+	cr.plugins_.Text.prototype.acts.SetVisible,
+	cr.system_object.prototype.acts.GoToLayout,
+	cr.plugins_.Text.prototype.exps.X,
+	cr.plugins_.Text.prototype.exps.Y,
+	cr.plugins_.Arr.prototype.acts.SetSize,
+	cr.plugins_.AJAX.prototype.acts.RequestFile,
+	cr.system_object.prototype.cnds.Repeat,
+	cr.plugins_.AJAX.prototype.cnds.OnComplete,
+	cr.system_object.prototype.exps.tokencount,
+	cr.plugins_.AJAX.prototype.exps.LastData,
+	cr.system_object.prototype.exps.newline,
+	cr.plugins_.Arr.prototype.acts.Push,
+	cr.system_object.prototype.exps.tokenat,
+	cr.system_object.prototype.exps.loopindex,
+	cr.plugins_.Arr.prototype.cnds.IsEmpty,
+	cr.system_object.prototype.exps["int"],
+	cr.plugins_.Arr.prototype.exps.Width,
+	cr.plugins_.Arr.prototype.exps.At,
+	cr.plugins_.Arr.prototype.acts.Delete,
+	cr.behaviors.DragnDrop.prototype.cnds.OnDrop,
+	cr.plugins_.Sprite.prototype.cnds.IsOverlapping,
+	cr.plugins_.Text.prototype.acts.AppendText,
+	cr.plugins_.Text.prototype.exps.Text,
+	cr.plugins_.Text.prototype.acts.SetPos,
+	cr.behaviors.DragnDrop.prototype.acts.SetEnabled,
+	cr.plugins_.Sprite.prototype.acts.SetY,
+	cr.system_object.prototype.exps.left,
+	cr.plugins_.Sprite.prototype.acts.SetAnimFrame,
+	cr.plugins_.Browser.prototype.acts.GoToURL,
+	cr.plugins_.Sprite.prototype.acts.SetInstanceVar,
+	cr.plugins_.Sprite.prototype.acts.SetCollisions,
+	cr.plugins_.Text.prototype.acts.Destroy,
+	cr.plugins_.Sprite.prototype.acts.SetPos,
+	cr.system_object.prototype.cnds.Else,
+	cr.behaviors.DragnDrop.prototype.cnds.IsDragging,
+	cr.plugins_.Text.prototype.cnds.CompareText,
+	cr.plugins_.Sprite.prototype.acts.MoveToBottom,
+	cr.system_object.prototype.exps.len,
+	cr.system_object.prototype.acts.SubVar,
+	cr.system_object.prototype.acts.Wait,
+	cr.behaviors.Rex_text_typing.prototype.acts.TypeText,
+	cr.plugins_.Audio.prototype.acts.StopAll,
+	cr.system_object.prototype.acts.RestartLayout,
+	cr.plugins_.Sprite.prototype.exps.X,
+	cr.plugins_.Sprite.prototype.exps.Y,
+	cr.plugins_.Sprite.prototype.acts.MoveToTop,
+	cr.plugins_.Sprite.prototype.acts.SetPosToObject,
+	cr.system_object.prototype.cnds.EveryTick,
+	cr.system_object.prototype.exps.cosp,
+	cr.plugins_.Touch.prototype.cnds.IsTouchingObject,
+	cr.plugins_.Sprite.prototype.acts.SetX,
+	cr.system_object.prototype.cnds.PickByComparison,
+	cr.plugins_.Text.prototype.cnds.PickByUID,
+	cr.behaviors.Flash.prototype.acts.Flash,
+	cr.system_object.prototype.cnds.PickByEvaluate,
+	cr.plugins_.Text.prototype.exps.UID,
+	cr.plugins_.Sprite.prototype.exps.UID,
+	cr.behaviors.Flash.prototype.acts.StopFlashing,
+	cr.plugins_.Sprite.prototype.cnds.PickByUID,
+	cr.plugins_.Sprite.prototype.acts.ZMoveToObject,
+	cr.behaviors.Rex_MoveTo.prototype.acts.SetTargetPos,
+	cr.plugins_.Sprite.prototype.cnds.CompareFrame,
+	cr.plugins_.Sprite.prototype.acts.StartAnim,
+	cr.plugins_.Sprite.prototype.cnds.IsAnimPlaying,
+	cr.plugins_.Sprite.prototype.exps.ImagePointX,
+	cr.plugins_.Sprite.prototype.exps.ImagePointY,
+	cr.plugins_.Text.prototype.acts.SetWebFont,
+	cr.system_object.prototype.acts.CreateObject,
+	cr.system_object.prototype.cnds.Compare,
+	cr.system_object.prototype.exps.find,
+	cr.plugins_.Text.prototype.acts.MoveForward,
+	cr.system_object.prototype.exps.replace,
+	cr.system_object.prototype.exps.right,
+	cr.plugins_.Sprite.prototype.acts.SetScale,
+	cr.plugins_.Sprite.prototype.acts.SetHeight,
+	cr.plugins_.Arr.prototype.acts.JSONLoad,
+	cr.system_object.prototype.acts.SetLayerVisible,
+	cr.plugins_.Arr.prototype.acts.Clear,
+	cr.system_object.prototype.cnds.TriggerOnce,
+	cr.plugins_.Function.prototype.acts.CallFunction,
+	cr.plugins_.Function.prototype.cnds.OnFunction,
+	cr.system_object.prototype.cnds.For,
+	cr.system_object.prototype.exps.mid,
+	cr.plugins_.Arr.prototype.exps.IndexOf,
+	cr.system_object.prototype.cnds.ForEachOrdered,
+	cr.plugins_.Sprite.prototype.exps.AnimationFrame,
+	cr.plugins_.Audio.prototype.acts.Play,
+	cr.plugins_.Sprite.prototype.exps.IID,
+	cr.system_object.prototype.cnds.LayerVisible,
+	cr.plugins_.Audio.prototype.cnds.IsTagPlaying,
+	cr.plugins_.Sprite.prototype.cnds.PickTopBottom,
+	cr.behaviors.DragnDrop.prototype.cnds.OnDragStart,
+	cr.system_object.prototype.exps.clamp,
+	cr.plugins_.Audio.prototype.cnds.OnEnded,
+	cr.plugins_.Sprite.prototype.acts.SetSize,
+	cr.plugins_.rex_TagText.prototype.acts.SetInstanceVar,
+	cr.plugins_.rex_TagText.prototype.acts.SetText,
+	cr.plugins_.rex_TagText.prototype.acts.SetVisible,
+	cr.plugins_.rex_TagText.prototype.cnds.DefineClass,
+	cr.plugins_.rex_TagText.prototype.acts.SetFontColor
 ];};
