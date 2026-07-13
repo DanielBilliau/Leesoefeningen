@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1783432614,
+	"version": 1783950903,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -51,6 +51,7 @@
 		"images/loading2-sheet0.png",
 		"images/reset-sheet0.png",
 		"images/hoofdmenu-sheet0.png",
+		"images/tiledbackground.png",
 		"media/bergtop.m4a",
 		"media/bergtop.ogg",
 		"media/bladluis.m4a",
