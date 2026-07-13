@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1783693925,
+	"version": 1783952532,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -10,10 +10,8 @@
 		"images/woordendictee1-sheet1.png",
 		"images/woordendictee1-sheet2.png",
 		"images/woordendictee1-sheet3.png",
-		"images/woordendictee1-sheet4.png",
 		"images/lettersdictee-sheet0.png",
 		"images/lettersdictee-sheet1.png",
-		"images/lettersdictee-sheet2.png",
 		"images/ww1-sheet0.png",
 		"images/home-sheet0.png",
 		"images/reeks1-sheet0.png",
@@ -37,7 +35,6 @@
 		"images/geluid1.png",
 		"images/img-sheet0.png",
 		"images/img-sheet1.png",
-		"images/img-sheet2.png",
 		"images/tiledbackground.png",
 		"images/img_frame-sheet0.png",
 		"images/canvas.png",
