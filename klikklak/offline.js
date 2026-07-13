@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1783539407,
+	"version": 1783949215,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -17,7 +17,6 @@
 		"images/kimwoord-sheet0.png",
 		"images/woordkaartje-sheet0.png",
 		"images/woordwis-sheet0.png",
-		"images/home-sheet0.png",
 		"images/wisall-sheet0.png",
 		"images/return-sheet0.png",
 		"images/leesbutton-sheet0.png",
