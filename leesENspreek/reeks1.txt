@@ -7,6 +7,7 @@ klomp
 kramp
 krans
 krant
+kreeft
 kwast
 plaats
 plint
@@ -14,17 +15,16 @@ plons
 prikt
 prins
 proost
-slang
 slurf
 spons
 sport
 start
 sterk
-krant
+stolp
 stomp
 storm
-krimp
 stunt
 trots
 vliegt
+vrouw
 zwart
