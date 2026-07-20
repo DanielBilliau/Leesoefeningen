@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1784574936,
+	"version": 1784578215,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -257,8 +257,6 @@
 		"media/suikerbrood.ogg",
 		"media/tafelkleed.m4a",
 		"media/tafelkleed.ogg",
-		"media/tweegevecht.m4a",
-		"media/tweegevecht.ogg",
 		"media/uurrooster.m4a",
 		"media/uurrooster.ogg",
 		"media/verkoudheid.m4a",
@@ -271,6 +269,8 @@
 		"media/zweefvlieger.ogg",
 		"media/inzinking.m4a",
 		"media/inzinking.ogg",
+		"media/vrouwenploeg.m4a",
+		"media/vrouwenploeg.ogg",
 		"icon-16.png",
 		"icon-32.png",
 		"icon-114.png",
