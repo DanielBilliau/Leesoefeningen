@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1783949215,
+	"version": 1784747273,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -27,6 +27,7 @@
 		"images/keuze1bachter-sheet0.png",
 		"images/kernkeuze-sheet0.png",
 		"images/hoofdmenu-sheet0.png",
+		"images/home-sheet0.png",
 		"icon-16.png",
 		"icon-32.png",
 		"icon-114.png",
