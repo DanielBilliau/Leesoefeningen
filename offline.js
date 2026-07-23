@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1784802188,
+	"version": 1784808435,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -25,8 +25,8 @@
 		"images/menu17-sheet0.png",
 		"images/menu18-sheet0.png",
 		"images/menu19-sheet0.png",
-		"images/verder-sheet0.png",
-		"images/terug-sheet0.png",
+		"images/verder1-sheet0.png",
+		"images/terug1-sheet0.png",
 		"images/menu20-sheet0.png",
 		"images/menu21-sheet0.png",
 		"images/menu22-sheet0.png",
@@ -46,6 +46,8 @@
 		"images/menu35-sheet0.png",
 		"images/menu36-sheet0.png",
 		"images/menu37-sheet0.png",
+		"images/menu38-sheet0.png",
+		"images/verder2-sheet0.png",
 		"icon-16.png",
 		"icon-32.png",
 		"icon-114.png",
