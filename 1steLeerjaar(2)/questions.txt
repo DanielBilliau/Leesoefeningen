@@ -1,0 +1,70 @@
+Welk dier is heel boos ?;
+een nijlpaard;
+een krokodil;
+een beer;
+een tijger;
+een beer;
+|
+Waar loopt die boze beer ?;
+op het strand;
+in de woestijn;
+op de boerderij;
+in het bos;
+in het bos;
+|
+Wat zoekt de beer ?;
+een hol om te slapen;
+voedsel om te eten;
+water om te drinken;
+een berin;
+voedsel om te eten;
+|
+Welk dier komt hij tegen ?;
+een wit konijn;
+een grijze muis;
+een rosse haas;
+een zwarte aap;
+een grijze muis;
+|
+Waar was de muis verstopt ?;
+achter een boom;
+in een konijnenhol;
+in een vogelnest;
+tussen de bladeren;
+achter een boom;
+|
+Wat deed de beer met de muis ?;
+hij joeg ze weg;
+hij nam ze mee;
+hij at de muis op;
+hij trapte ze plat;
+hij at de muis op;
+|
+Wat voelde hij in zijn buik ?;
+zijn buik deed pijn;
+zijn buik kriebelde;
+hij voelde zich heel goed;
+zijn buik werd dik;
+zijn buik kriebelde;
+|
+Waar ging hij kijken ?;
+in een plas water;
+bij de dierendokter;
+in een spiegel;
+bij de bosuil;
+in een spiegel;
+|
+Welke kleur had zijn pels ?;
+geel en rode strepen;
+blauw met gele strepen;
+blauw en gele kringen;
+groen en witte stippen;
+blauw met gele strepen;
+|
+Waar vloog de muis tegen ?;
+tegen het raam;
+tegen de spiegel;
+tegen het plafond;
+tegen de deur;
+tegen de deur;
+|
