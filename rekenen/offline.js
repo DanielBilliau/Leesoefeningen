@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1783970999,
+	"version": 1785071031,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -283,7 +283,7 @@
 		"images/canvas41.png",
 		"images/aanwijzing9-sheet0.png",
 		"images/ballon-sheet0.png",
-		"images/tiledbackground.png",
+		"images/tiledbackground1.png",
 		"images/gekjes11-sheet0.png",
 		"images/gekjes11-sheet1.png",
 		"images/aanwijzing10-sheet0.png",
@@ -464,6 +464,8 @@
 		"images/r17-sheet0.png",
 		"images/r18-sheet0.png",
 		"images/hoofdmenu-sheet0.png",
+		"images/waiting2-sheet0.png",
+		"images/tiledbackground.png",
 		"media/acht.m4a",
 		"media/acht.ogg",
 		"media/achttienw.m4a",
