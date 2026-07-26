@@ -1,0 +1,12 @@
+bed
+boos
+bus
+deur
+dier
+huis
+neer
+puk
+rog
+soep
+tuin
+zoon
