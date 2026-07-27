@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1784995377,
+	"version": 1785169733,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -27,7 +27,7 @@
 		"images/achtercijfer2-sheet0.png",
 		"images/aanwijzing2-sheet0.png",
 		"images/tiendes2-sheet0.png",
-		"images/waiting2-sheet0.png",
+		"images/waiting1-sheet0.png",
 		"images/aanwijzing3-sheet0.png",
 		"images/resume-sheet0.png",
 		"images/juist2-sheet0.png",
@@ -253,6 +253,7 @@
 		"images/aanwijzing52-sheet0.png",
 		"images/antwoorden1-sheet0.png",
 		"images/hoofdmenu-sheet0.png",
+		"images/waiting2-sheet0.png",
 		"media/benauwd.m4a",
 		"media/benauwd.ogg",
 		"media/bouwwerf.m4a",
