@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1784975309,
+	"version": 1785168460,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -162,7 +162,7 @@
 		"images/achter1a-sheet0.png",
 		"images/hoofdrekenen-sheet0.png",
 		"images/aanwijzing310-sheet0.png",
-		"images/waiting2-sheet0.png",
+		"images/waiting1-sheet0.png",
 		"images/woordjes-sheet0.png",
 		"images/omschrijving1-sheet0.png",
 		"images/aanwijzing109-sheet0.png",
@@ -218,6 +218,7 @@
 		"images/juist-sheet0.png",
 		"images/aanwijzing115-sheet0.png",
 		"images/hoofdmenu-sheet0.png",
+		"images/waiting2-sheet0.png",
 		"media/agenten.m4a",
 		"media/agenten.ogg",
 		"media/bananen.m4a",
