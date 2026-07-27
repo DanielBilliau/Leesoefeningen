@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1783881405,
+	"version": 1785184830,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -172,6 +172,7 @@
 		"images/uitlegdictee2-sheet0.png",
 		"images/tiledbackground.png",
 		"images/hoofdmenu-sheet0.png",
+		"images/waiting2-sheet0.png",
 		"media/avond.m4a",
 		"media/avond.ogg",
 		"media/kameel.m4a",
