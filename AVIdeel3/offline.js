@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1783885974,
+	"version": 1785146179,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -14,6 +14,7 @@
 		"images/start-sheet0.png",
 		"images/tiledbackground.png",
 		"images/hoofdmenu-sheet0.png",
+		"images/waiting2-sheet0.png",
 		"media/pipdevis.m4a",
 		"media/pipdevis.ogg",
 		"media/paardindewei.m4a",
