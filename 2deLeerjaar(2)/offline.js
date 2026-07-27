@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1784987358,
+	"version": 1785159560,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -7,7 +7,7 @@
 		"offlineClient.js",
 		"images/auteur-sheet0.png",
 		"images/home-sheet0.png",
-		"images/waiting2-sheet0.png",
+		"images/waiting1-sheet0.png",
 		"images/backgr1-sheet0.png",
 		"images/verder0-sheet0.png",
 		"images/backgr2-sheet0.png",
@@ -287,6 +287,7 @@
 		"images/boodschappen1-sheet0.png",
 		"images/boodschappen1-sheet1.png",
 		"images/hoofdmenu-sheet0.png",
+		"images/waiting2-sheet0.png",
 		"media/adder.m4a",
 		"media/adder.ogg",
 		"media/arend.m4a",
