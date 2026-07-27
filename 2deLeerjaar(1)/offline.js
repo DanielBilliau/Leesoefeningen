@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1785000365,
+	"version": 1785157740,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -162,7 +162,7 @@
 		"images/aanwijzing13-sheet0.png",
 		"images/check2-sheet0.png",
 		"images/aanwijzing11-sheet0.png",
-		"images/waiting2-sheet0.png",
+		"images/waiting1-sheet0.png",
 		"images/achter25-sheet0.png",
 		"images/schaar-sheet0.png",
 		"images/schaar-sheet1.png",
@@ -373,6 +373,7 @@
 		"images/achterverkeer-sheet0.png",
 		"images/aanwijzing52-sheet0.png",
 		"images/hoofdmenu-sheet0.png",
+		"images/waiting2-sheet0.png",
 		"media/stil.m4a",
 		"media/stil.ogg",
 		"media/appel.m4a",
