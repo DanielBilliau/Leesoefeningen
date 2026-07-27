@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1783886604,
+	"version": 1785147425,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -73,7 +73,6 @@
 		"images/prenten8-sheet0.png",
 		"images/prenten8-sheet1.png",
 		"images/prenten8-sheet2.png",
-		"images/waiting-sheet0.png",
 		"images/loading2-sheet0.png",
 		"images/prenten9-sheet0.png",
 		"images/prenten9-sheet1.png",
@@ -166,6 +165,7 @@
 		"images/uitleg-sheet0.png",
 		"images/hoofdmenu-sheet0.png",
 		"images/tiledbackground.png",
+		"images/waiting2-sheet0.png",
 		"media/fout.m4a",
 		"media/fout.ogg",
 		"media/juist.m4a",
