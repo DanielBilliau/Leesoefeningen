@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1784998151,
+	"version": 1785166801,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -124,7 +124,7 @@
 		"images/canvas8.png",
 		"images/achter25-sheet0.png",
 		"images/start-sheet0.png",
-		"images/waiting2-sheet0.png",
+		"images/waiting1-sheet0.png",
 		"images/denkna-sheet0.png",
 		"images/juist21a-sheet0.png",
 		"images/achter8-sheet0.png",
@@ -250,6 +250,7 @@
 		"images/spreek2-sheet0.png",
 		"images/aanwijzing213-sheet0.png",
 		"images/hoofdmenu-sheet0.png",
+		"images/waiting2-sheet0.png",
 		"media/bakkerij.m4a",
 		"media/bakkerij.ogg",
 		"media/chocolade.m4a",
