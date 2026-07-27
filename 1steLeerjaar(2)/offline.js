@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1784989837,
+	"version": 1785154926,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -99,7 +99,7 @@
 		"images/schaar-sheet0.png",
 		"images/schaar-sheet1.png",
 		"images/links-sheet0.png",
-		"images/waiting2-sheet0.png",
+		"images/waiting1-sheet0.png",
 		"images/rechts-sheet0.png",
 		"images/gom-sheet0.png",
 		"images/gom-sheet1.png",
@@ -317,6 +317,7 @@
 		"images/cirkels2-sheet1.png",
 		"images/menu38-sheet0.png",
 		"images/hoofdmenu-sheet0.png",
+		"images/waiting2-sheet0.png",
 		"media/agent.m4a",
 		"media/agent.ogg",
 		"media/applause.m4a",
