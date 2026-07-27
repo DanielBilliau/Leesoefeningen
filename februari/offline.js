@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1783936200,
+	"version": 1785181531,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -142,6 +142,7 @@
 		"images/uitlegsleep2-sheet0.png",
 		"images/tiledbackground.png",
 		"images/hoofdmenu-sheet0.png",
+		"images/waiting2-sheet0.png",
 		"media/dwerg.m4a",
 		"media/dwerg.ogg",
 		"media/krans.m4a",
