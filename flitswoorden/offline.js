@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1783943703,
+	"version": 1785172875,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -29,6 +29,7 @@
 		"images/flitswoordenvrij-sheet0.png",
 		"images/sprite-sheet0.png",
 		"images/hoofdmenu-sheet0.png",
+		"images/waiting2-sheet0.png",
 		"media/be-nieuwd.m4a",
 		"media/be-nieuwd.ogg",
 		"media/bloei-tijd.m4a",
