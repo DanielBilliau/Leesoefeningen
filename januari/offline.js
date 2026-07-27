@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1783945781,
+	"version": 1785179930,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -128,6 +128,7 @@
 		"images/loading-sheet2.png",
 		"images/hoofdmenu-sheet0.png",
 		"images/tiledbackground.png",
+		"images/waiting2-sheet0.png",
 		"media/dakpan.m4a",
 		"media/dakpan.ogg",
 		"media/goudvis.m4a",
