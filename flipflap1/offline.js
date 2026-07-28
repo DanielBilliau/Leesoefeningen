@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1783937984,
+	"version": 1785246722,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -91,6 +91,7 @@
 		"images/waiting-sheet0.png",
 		"images/loading2-sheet0.png",
 		"images/hoofdmenu-sheet0.png",
+		"images/waiting2-sheet0.png",
 		"media/page-turning.m4a",
 		"media/page-turning.ogg",
 		"media/stil.m4a",
