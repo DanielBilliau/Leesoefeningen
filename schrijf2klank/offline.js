@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1783610988,
+	"version": 1785254677,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -253,6 +253,8 @@
 		"images/schrijfsch-sheet1.png",
 		"images/schoefen-sheet0.png",
 		"images/hoofdmenu-sheet0.png",
+		"images/tiledbackground.png",
+		"images/waiting2-sheet0.png",
 		"media/haag.m4a",
 		"media/haag.ogg",
 		"media/haak.m4a",
