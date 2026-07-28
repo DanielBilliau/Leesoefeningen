@@ -1,6 +1,6 @@
 ﻿{
-	"name": "KlikKlakBoekjes",
-	"short_name": "KlikKlakBoekjes",
+	"name": "klikklak",
+	"short_name": "klikklak",
 	"start_url": "index.html",
 	"display": "fullscreen",
 	"orientation": "landscape",

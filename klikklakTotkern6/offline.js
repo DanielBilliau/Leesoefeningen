@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1784899703,
+	"version": 1785223523,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -57,6 +57,7 @@
 		"images/uitleg29-sheet0.png",
 		"images/uitleg30-sheet0.png",
 		"images/uitleg31-sheet0.png",
+		"images/waiting2-sheet0.png",
 		"media/aa.m4a",
 		"media/aa.ogg",
 		"media/e.m4a",
