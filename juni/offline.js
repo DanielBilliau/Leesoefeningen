@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1783947045,
+	"version": 1785186416,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -174,6 +174,7 @@
 		"images/uitlegraadsel-sheet0.png",
 		"images/tiledbackground.png",
 		"images/hoofdmenu-sheet0.png",
+		"images/waiting2-sheet0.png",
 		"media/stil.m4a",
 		"media/stil.ogg",
 		"media/aankleden.m4a",
