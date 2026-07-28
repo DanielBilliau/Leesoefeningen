@@ -1,6 +1,6 @@
 ﻿{
-	"name": "Kruiswoorden1VLL",
-	"short_name": "Kruiswoorden1VLL",
+	"name": "kruiswoord",
+	"short_name": "kruiswoord",
 	"start_url": "index.html",
 	"display": "fullscreen",
 	"orientation": "landscape",
