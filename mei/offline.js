@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1783960796,
+	"version": 1785185793,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -177,6 +177,7 @@
 		"images/uitlegmaker2-sheet0.png",
 		"images/tiledbackground.png",
 		"images/hoofdmenu-sheet0.png",
+		"images/waiting2-sheet0.png",
 		"media/boren.m4a",
 		"media/boren.ogg",
 		"media/degen.m4a",
