@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1783956352,
+	"version": 1785242773,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -47,6 +47,7 @@
 		"images/reeks14-sheet0.png",
 		"images/tiledbackground2.png",
 		"images/hoofdmenu-sheet0.png",
+		"images/waiting2-sheet0.png",
 		"media/bagage.m4a",
 		"media/bagage.ogg",
 		"media/bakker.m4a",
