@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1783888816,
+	"version": 1785257131,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -262,6 +262,7 @@
 		"images/loading-sheet2.png",
 		"images/hoofdmenu-sheet0.png",
 		"images/tiledbackground21.png",
+		"images/waiting2-sheet0.png",
 		"media/dwerg.m4a",
 		"media/dwerg.ogg",
 		"media/krant.m4a",
