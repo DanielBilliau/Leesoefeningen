@@ -1,6 +1,6 @@
 ﻿{
-	"name": "rekenenTOT20",
-	"short_name": "rekenenTOT20",
+	"name": "rekenen20spel",
+	"short_name": "rekenen20spel",
 	"start_url": "index.html",
 	"display": "fullscreen",
 	"orientation": "landscape",
