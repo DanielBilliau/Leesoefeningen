@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1784737646,
+	"version": 1785238776,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -35,6 +35,7 @@
 		"images/reeks6-sheet0.png",
 		"images/reeks7-sheet0.png",
 		"images/reeks8-sheet0.png",
+		"images/waiting2-sheet0.png",
 		"media/broers.m4a",
 		"media/broers.ogg",
 		"media/brons.m4a",
