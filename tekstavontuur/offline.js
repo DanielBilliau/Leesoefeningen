@@ -1,5 +1,5 @@
 ﻿{
-	"version": 1783449027,
+	"version": 1785268532,
 	"fileList": [
 		"data.js",
 		"c2runtime.js",
@@ -153,6 +153,8 @@
 		"images/elf-sheet0.png",
 		"images/uitleg15-sheet0.png",
 		"images/hoofdmenu-sheet0.png",
+		"images/tiledbackground.png",
+		"images/waiting2-sheet0.png",
 		"media/deur.m4a",
 		"media/deur.ogg",
 		"media/goud.m4a",
