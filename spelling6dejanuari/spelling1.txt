@@ -1,0 +1,32 @@
+stamcafé,Kroeg waar men stamgast is.
+privé,Niet openbaar deel van een gebouw.
+communiqué,Officiële mededeling aan het publiek.
+comité,Groep mensen met een bepaald doel.
+kaassoufflé,Een gefrituurde snack van een stuk kaas.
+congé,Verlof.Vakantie.
+canapé,Een bank om op te liggen of te zitten.
+kipsaté,Kippenvlees in blokjes en aan een stokje geregen.
+souper,Avondmaaltijd.
+diner,Luxueuze maaltijd in de avond.
+atelier,Werkplaats van een kunstenaar.
+bouvier,Hond van een uit België afkomstig ras.
+foyer,Ruimte waar je wat kunt drinken in een theater.
+croupier,Spelleider van een casino.
+metier,Beroep.Vak.Ambacht.
+premier,Leider van de ministers van een land.
+cocktailsaus,Saus op basis van mayonaise.
+bodypainting,Beschilderen van het lichaam als persoonlijke versiering.
+brainstormen,Nieuwe ideeën over een bepaald onderwerp bedenken.
+aidsmedicijn,Geneesmiddel tegen een ziekte.
+e-mailadres,Adres voor het verzenden en ontvangen van een bericht.
+railvoertuig,Een voertuig dat sporen gebruikt voor het vervoer.
+zeecontainer,Gestandaardiseerde kist voor zeetransport.
+schadeclaim,Een eis tot schadevergoeding.
+abonnee,Iemand die tegen betaling regelmatig iets krijgt of bezoekt. 
+tomatenpuree,Gezeefde en ingedikte tomatenpulp.
+tournee,Rondreis door een artiest.
+chimpansee,Afrikaanse gedrongen sterke mensaap.
+jachttrofee,Hoorns van bijvoorbeeld een rendier.
+citroenthee,Warme drank gemaakt met citroensmaak.
+portemonnee,Mapje of zakje waarin je je geld bij je draagt.
+dominee,Iemand die als beroep een kerkdienst leidt in de protestantse kerk.
