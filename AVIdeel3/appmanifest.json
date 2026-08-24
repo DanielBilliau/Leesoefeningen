@@ -1,7 +1,7 @@
 {
 	"name": "AVIlezen3",
 	"short_name": "AVIlezen3",
-	"description": "AVI lezen",
+	"description": "AVI lezen met voorlezen",
 	"start_url": "index.html",
 	"display": "fullscreen",
 	"orientation": "landscape",
